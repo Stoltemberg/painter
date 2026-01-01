@@ -77,6 +77,7 @@ html {
     box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
 }
 
+/* UI Layer */
 #ui-layer {
     position: absolute;
     top: 0;
@@ -84,15 +85,28 @@ html {
     width: 100%;
     height: 100%;
     pointer-events: none;
+    z-index: 100;
+    transition: opacity 0.3s;
+}
+
+.hidden-ui {
+    opacity: 0;
+    pointer-events: none !important;
 }
 
 /* Top Bar */
 .top-bar {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 10px;
+    left: 10px;
+    background: var(--panel-bg);
+    padding: 8px 15px;
+    border-radius: 20px;
     display: flex;
     gap: 15px;
+    font-size: 0.9rem;
+    backdrop-filter: blur(5px);
+    border: 1px solid var(--border-color);
     pointer-events: auto;
 }
 
@@ -118,16 +132,16 @@ html {
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(30, 30, 30, 0.9);
+    background: var(--panel-bg);
     padding: 10px 20px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-    pointer-events: auto;
+    border-radius: 50px;
     display: flex;
     align-items: center;
     gap: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
+    pointer-events: auto;
 }
 
 .color-section {
@@ -149,8 +163,8 @@ html {
     display: flex;
     gap: 5px;
     padding: 0 15px;
-    border-left: 1px solid rgba(255, 255, 255, 0.2);
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
 }
 
 .recent-color-swatch {
@@ -158,13 +172,42 @@ html {
     height: 25px;
     border-radius: 4px;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--border-color);
     transition: transform 0.1s;
 }
 
 .recent-color-swatch:hover {
     transform: scale(1.1);
-    border-color: white;
+    border-color: var(--text-color);
+}
+
+/* Teleport */
+.teleport-bar {
+    display: flex;
+    gap: 5px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border-color);
+}
+
+.teleport-bar input {
+    width: 50px;
+    background: rgba(0, 0, 0, 0.3);
+    /* Keep semi-transparent for inputs on top of blur */
+    border: 1px solid #555;
+    color: white;
+    /* Always white inside dark inputs for now, or use var if needed */
+    border-radius: 4px;
+    padding: 2px 5px;
+}
+
+#nicknameInput {
+    width: 80px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #555;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
 }
 
 /* Cursors */

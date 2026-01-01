@@ -11,6 +11,8 @@ const recentColorsDiv = document.getElementById('recentColors');
 const eraserBtn = document.getElementById('eraserBtn');
 const exportBtn = document.getElementById('exportBtn');
 const soundBtn = document.getElementById('soundBtn');
+const themeBtn = document.getElementById('themeBtn');
+const nicknameInput = document.getElementById('nicknameInput');
 const resetBtn = document.getElementById('resetView');
 const teleX = document.getElementById('teleX');
 const teleY = document.getElementById('teleY');
@@ -21,6 +23,7 @@ const onlineCountDiv = document.getElementById('onlineCount');
 const cursorLayer = document.getElementById('cursor-layer');
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
+const uiLayer = document.getElementById('ui-layer');
 
 // State
 let boardSize = 3000;
@@ -34,6 +37,33 @@ let lastY = 0;
 let currentMode = 'brush';
 let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
 let soundEnabled = true;
+let myNickname = localStorage.getItem('painter_nickname') || 'Guest';
+
+// UI Setup
+if (nicknameInput) {
+    nicknameInput.value = myNickname;
+    nicknameInput.addEventListener('change', () => {
+        myNickname = nicknameInput.value.substring(0, 15) || 'Guest';
+        localStorage.setItem('painter_nickname', myNickname);
+    });
+}
+
+// Theme Toggle
+let isLightMode = false;
+if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+        isLightMode = !isLightMode;
+        document.body.classList.toggle('light-mode', isLightMode);
+        themeBtn.textContent = isLightMode ? '🌑' : '🌗';
+    });
+}
+
+// Spectator Mode
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'h' && document.activeElement !== chatInput && document.activeElement !== nicknameInput) {
+        uiLayer.classList.toggle('hidden-ui');
+    }
+});
 
 // Audio Context
 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -109,7 +139,7 @@ if (chatInput) {
                 // Send message logic
                 const text = chatInput.value.trim();
                 if (text) {
-                    socket.emit('chat', { text });
+                    socket.emit('chat', { text, name: myNickname });
                     chatInput.value = '';
                 }
                 chatInput.blur(); // Close chat focus
@@ -128,10 +158,10 @@ if (chatInput) {
     });
 }
 
-function addChatMessage(text, isMe = false) {
+function addChatMessage(text, isMe = false, name = 'Anon') {
     const div = document.createElement('div');
     div.className = 'chat-msg';
-    div.textContent = text;
+    div.textContent = `${name}: ${text}`;
     if (isMe) div.style.background = 'rgba(74, 222, 128, 0.5)';
 
     // Auto-scroll
@@ -273,13 +303,94 @@ function screenToWorld(sx, sy) {
     return { x: Math.floor(worldX), y: Math.floor(worldY) };
 }
 
+// --- Mobile Touch Support ---
+let touchStartDist = 0;
+let touchStartScale = 0;
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); // Prevent scrolling
+    if (document.activeElement === chatInput || document.activeElement === nicknameInput) return;
+
+    if (e.touches.length === 1) {
+        // Paint or Drag if tool selected? 
+        // Logic: 1 finger = Paint
+        const t = e.touches[0];
+        isPainting = true;
+        paint(t.clientX, t.clientY);
+    } else if (e.touches.length === 2) {
+        // Pan/Zoom start
+        isDragging = true;
+        lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        touchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        touchStartScale = scale;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isPainting) {
+        const t = e.touches[0];
+        paint(t.clientX, t.clientY);
+
+        // Emit cursor for mobile too?
+        // const { x, y } = screenToWorld(t.clientX, t.clientY);
+        // ...
+    } else if (e.touches.length === 2 && isDragging) {
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+
+        // Pan
+        const dx = cx - lastX;
+        const dy = cy - lastY;
+        offsetX -= dx / scale;
+        offsetY -= dy / scale;
+        lastX = cx;
+        lastY = cy;
+
+        // Zoom
+        if (touchStartDist > 0) {
+            const newScale = touchStartScale * (dist / touchStartDist);
+            // Limit zoom
+            if (newScale > 0.05 && newScale < 50) {
+                // To zoom around center (simplified)
+                const rect = canvas.getBoundingClientRect();
+                const mx = cx - rect.left;
+                const my = cy - rect.top;
+                const wx = mx / scale + offsetX;
+                const wy = my / scale + offsetY;
+
+                scale = newScale;
+                offsetX = wx - mx / scale;
+                offsetY = wy - my / scale;
+            }
+        }
+
+        draw();
+        updateMinimapViewport();
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => {
+    isPainting = false;
+    isDragging = false;
+});
+
+
 // --- Mouse Events ---
 canvas.addEventListener('mousedown', e => {
     // Resume audio context
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
     // Prevent drawing if chat is focused
-    if (document.activeElement === chatInput) return;
+    if (document.activeElement === chatInput || document.activeElement === nicknameInput) return;
 
     if (e.button === 0) {
         isPainting = true;
@@ -302,7 +413,7 @@ canvas.addEventListener('mousemove', e => {
     // Emit Cursor Position
     const now = Date.now();
     if (now - lastCursorEmit > 50) {
-        socket.emit('cursor', { x: x + 0.5, y: y + 0.5 });
+        socket.emit('cursor', { x: x + 0.5, y: y + 0.5, name: myNickname });
         lastCursorEmit = now;
     }
 
@@ -449,11 +560,29 @@ socket.on('cursor', (data) => {
         const hue = Math.floor(Math.random() * 360);
         el.style.borderBottomColor = `hsl(${hue}, 100%, 50%)`;
 
+        // Label with name
+        const label = document.createElement('div');
+        label.className = 'cursor-label';
+        label.style.position = 'absolute';
+        label.style.left = '10px';
+        label.style.top = '10px';
+        label.style.background = 'rgba(0,0,0,0.7)';
+        label.style.color = 'white';
+        label.style.padding = '2px 4px';
+        label.style.borderRadius = '4px';
+        label.style.fontSize = '10px';
+        label.style.whiteSpace = 'nowrap';
+        label.textContent = data.name || 'Guest';
+        el.appendChild(label);
+
         cursorLayer.appendChild(el);
-        cursors[data.id] = { element: el, worldX: data.x, worldY: data.y };
+        cursors[data.id] = { element: el, worldX: data.x, worldY: data.y, label: label };
     } else {
         cursors[data.id].worldX = data.x;
         cursors[data.id].worldY = data.y;
+        if (cursors[data.id].label.textContent !== (data.name || 'Guest')) {
+            cursors[data.id].label.textContent = data.name || 'Guest';
+        }
     }
 });
 
@@ -469,5 +598,5 @@ socket.on('online_count', (count) => {
 });
 
 socket.on('chat', (msg) => {
-    addChatMessage(msg.text, msg.id === socket.id);
+    addChatMessage(msg.text, msg.id === socket.id, msg.name);
 });

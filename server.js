@@ -165,17 +165,23 @@ io.on('connection', (socket) => {
 
     socket.on('cursor', (data) => {
         // Broadcast cursor position to everyone else
-        // data: { x, y } (World Coordinates)
+        // data: { x, y, name }
         socket.broadcast.emit('cursor', {
             id: socket.id,
             x: data.x,
-            y: data.y
+            y: data.y,
+            name: data.name // Pass nickname
         });
     });
 
     socket.on('chat', (msg) => {
         if (msg && msg.text) {
-            io.emit('chat', { id: socket.id, text: msg.text.substring(0, 100) });
+            // msg: { text, name }
+            io.emit('chat', {
+                id: socket.id,
+                text: msg.text.substring(0, 100),
+                name: msg.name ? msg.name.substring(0, 20) : null
+            });
         }
     });
 
