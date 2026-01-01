@@ -6,9 +6,7 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
-      - key: NODE_VERSION
-        value: 20.0.0
-    disk:
-      name: board-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
