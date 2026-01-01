@@ -163,8 +163,20 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('cursor', (data) => {
+        // Broadcast cursor position to everyone else
+        // data: { x, y } (World Coordinates)
+        socket.broadcast.emit('cursor', {
+            id: socket.id,
+            x: data.x,
+            y: data.y
+        });
+    });
+
     socket.on('disconnect', () => {
         io.emit('online_count', io.engine.clientsCount);
+        // Tell others to remove this cursor
+        socket.broadcast.emit('cursor_disconnect', socket.id);
     });
 });
 

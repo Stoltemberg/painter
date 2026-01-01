@@ -7,13 +7,13 @@ const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 const minimapViewport = document.getElementById('minimap-viewport');
 const colorPicker = document.getElementById('colorPicker');
-const brushSizeInput = document.getElementById('brushSize');
-const brushSizeLabel = document.getElementById('brushSizeLabel');
+const recentColorsDiv = document.getElementById('recentColors');
 const eraserBtn = document.getElementById('eraserBtn');
 const statusDiv = document.getElementById('status');
 const resetBtn = document.getElementById('resetView');
 const coordsDiv = document.getElementById('coords');
 const onlineCountDiv = document.getElementById('onlineCount');
+const cursorLayer = document.getElementById('cursor-layer');
 
 // State
 let boardSize = 3000;
@@ -25,47 +25,68 @@ let isPainting = false;
 let lastX = 0;
 let lastY = 0;
 let currentMode = 'brush'; // 'brush' or 'eraser'
-let brushSize = 1;
+let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff']; // Defaults
+
+// Cursors Map
+const cursors = {}; // id -> element
 
 // Offscreen buffer
 const bufferCanvas = document.createElement('canvas');
 const bufferCtx = bufferCanvas.getContext('2d', { alpha: false });
 bufferCanvas.width = boardSize;
 bufferCanvas.height = boardSize;
-// Fill white initially
 bufferCtx.fillStyle = '#ffffff';
 bufferCtx.fillRect(0, 0, boardSize, boardSize);
 
 // --- Inputs ---
-if (brushSizeInput) {
-    brushSizeInput.addEventListener('input', (e) => {
-        brushSize = parseInt(e.target.value);
-        if (brushSizeLabel) brushSizeLabel.textContent = `${brushSize}px`;
-    });
-}
-
 if (eraserBtn) {
     eraserBtn.addEventListener('click', () => {
         currentMode = 'eraser';
         canvas.style.cursor = 'cell';
-        // Optional: Highlight active tool
         eraserBtn.style.border = '2px solid #4ade80';
     });
 }
 
+function setColor(hex) {
+    colorPicker.value = hex;
+    currentMode = 'brush';
+    canvas.style.cursor = 'crosshair';
+    if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+    updateRecentColorsUI();
+}
+
 if (colorPicker) {
-    colorPicker.addEventListener('click', () => {
-        currentMode = 'brush';
-        canvas.style.cursor = 'crosshair';
-        eraserBtn.style.border = '1px solid #555';
-    });
-    // Also reset if color changes
     colorPicker.addEventListener('input', () => {
         currentMode = 'brush';
         canvas.style.cursor = 'crosshair';
-        eraserBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+    });
+    colorPicker.addEventListener('change', () => {
+        addRecentColor(colorPicker.value);
     });
 }
+
+// Recent Colors Logic
+function addRecentColor(hex) {
+    if (!recentColors.includes(hex)) {
+        recentColors.unshift(hex);
+        if (recentColors.length > 5) recentColors.pop();
+        updateRecentColorsUI();
+    }
+}
+
+function updateRecentColorsUI() {
+    if (!recentColorsDiv) return;
+    recentColorsDiv.innerHTML = '';
+    recentColors.forEach(color => {
+        const swatch = document.createElement('div');
+        swatch.className = 'recent-color-swatch';
+        swatch.style.backgroundColor = color;
+        swatch.addEventListener('click', () => setColor(color));
+        recentColorsDiv.appendChild(swatch);
+    });
+}
+updateRecentColorsUI(); // Init
 
 // --- Resize Handling ---
 function resize() {
@@ -96,8 +117,10 @@ function draw() {
         const vh = canvas.height / scale;
         drawGrid(ctx, vx, vy, vw, vh);
     }
-
     ctx.restore();
+
+    // Update Cursors Position (Keep them in sync with view)
+    updateCursors();
 }
 
 function drawGrid(ctx, vx, vy, vw, vh) {
@@ -113,6 +136,22 @@ function drawGrid(ctx, vx, vy, vw, vh) {
     for (let x = startX; x <= endX; x++) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
     for (let y = startY; y <= endY; y++) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
     ctx.stroke();
+}
+
+// --- Cursor Logic ---
+function updateCursors() {
+    // Need to map World Coordinates -> Screen Coordinates
+    // Screen = (World - Offset) * Scale
+
+    // transform: translate(...)
+    // We update the DOM elements directly
+    for (const id in cursors) {
+        const cursor = cursors[id];
+        const screenX = (cursor.worldX - offsetX) * scale;
+        const screenY = (cursor.worldY - offsetY) * scale;
+
+        cursor.element.style.transform = `translate(${screenX}px, ${screenY}px)`;
+    }
 }
 
 // --- Minimap Logic ---
@@ -153,9 +192,17 @@ canvas.addEventListener('mousedown', e => {
     }
 });
 
+let lastCursorEmit = 0;
 canvas.addEventListener('mousemove', e => {
     const { x, y } = screenToWorld(e.clientX, e.clientY);
     if (coordsDiv) coordsDiv.textContent = `X: ${x}, Y: ${y}`;
+
+    // Emit Cursor Position
+    const now = Date.now();
+    if (now - lastCursorEmit > 50) { // Throttle 20fps
+        socket.emit('cursor', { x: x + 0.5, y: y + 0.5 }); // +0.5 to center
+        lastCursorEmit = now;
+    }
 
     if (isPainting) {
         paint(e.clientX, e.clientY);
@@ -231,31 +278,25 @@ function paint(clientX, clientY) {
             r = parseInt(hex.slice(1, 3), 16);
             g = parseInt(hex.slice(3, 5), 16);
             b = parseInt(hex.slice(5, 7), 16);
+            addRecentColor(hex);
         }
 
-        const size = brushSize || 1;
-        drawPixel(x, y, r, g, b, size);
-        socket.emit('pixel', { x, y, r, g, b, size });
+        drawPixel(x, y, r, g, b);
+        socket.emit('pixel', { x, y, r, g, b, size: 1 });
     }
 }
 
-function drawPixel(x, y, r, g, b, size) {
-    // Fill rect on buffer
+function drawPixel(x, y, r, g, b) {
+    // Fill 1x1
     bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
-    // Center brush
-    const half = Math.floor(size / 2);
-    bufferCtx.fillRect(x - half, y - half, size, size);
+    bufferCtx.fillRect(x, y, 1, 1);
 
     draw();
 
-    // Minimap - Debounce or simplified update
     minimapCtx.fillStyle = `rgb(${r},${g},${b})`;
     const mx = Math.floor(x / boardSize * 150);
     const my = Math.floor(y / boardSize * 150);
-    // Draw slightly bigger on minimap if size is large
-    // Scale size:
-    const mSize = Math.max(1, (size / boardSize) * 150);
-    minimapCtx.fillRect(mx - mSize / 2, my - mSize / 2, mSize, mSize);
+    minimapCtx.fillRect(mx, my, 1, 1);
 }
 
 // --- Socket ---
@@ -294,7 +335,45 @@ socket.on('init', (buffer) => {
 });
 
 socket.on('pixel', (data) => {
-    drawPixel(data.x, data.y, data.r, data.g, data.b, data.size || 1);
+    drawPixel(data.x, data.y, data.r, data.g, data.b);
+});
+
+socket.on('cursor', (data) => {
+    // data: { id, x, y }
+    if (!cursors[data.id]) {
+        // Create new cursor element
+        const el = document.createElement('div');
+        el.className = 'cursor';
+
+        // Random color for cursor?
+        const hue = Math.floor(Math.random() * 360);
+        el.style.borderBottomColor = `hsl(${hue}, 100%, 50%)`;
+
+        // Label (optional)
+        const label = document.createElement('div');
+        label.className = 'cursor-label';
+        label.textContent = 'Player';
+        el.appendChild(label);
+
+        cursorLayer.appendChild(el);
+        cursors[data.id] = { element: el, worldX: data.x, worldY: data.y };
+    } else {
+        cursors[data.id].worldX = data.x;
+        cursors[data.id].worldY = data.y;
+    }
+    // Update visual position
+    // (We do this in draw loop too, but nice to do immediately)
+    const cursor = cursors[data.id];
+    const screenX = (cursor.worldX - offsetX) * scale;
+    const screenY = (cursor.worldY - offsetY) * scale;
+    cursor.element.style.transform = `translate(${screenX}px, ${screenY}px)`;
+});
+
+socket.on('cursor_disconnect', (id) => {
+    if (cursors[id]) {
+        cursorLayer.removeChild(cursors[id].element);
+        delete cursors[id];
+    }
 });
 
 socket.on('online_count', (count) => {
