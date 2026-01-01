@@ -173,6 +173,12 @@ io.on('connection', (socket) => {
         });
     });
 
+    socket.on('chat', (msg) => {
+        if (msg && msg.text) {
+            io.emit('chat', { id: socket.id, text: msg.text.substring(0, 100) });
+        }
+    });
+
     socket.on('disconnect', () => {
         io.emit('online_count', io.engine.clientsCount);
         // Tell others to remove this cursor
