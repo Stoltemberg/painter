@@ -200,14 +200,37 @@ html {
     padding: 2px 5px;
 }
 
-#nicknameInput {
-    width: 80px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid #555;
-    color: white;
-    border-radius: 4px;
-    padding: 4px 8px;
+/* Instructions */
+.instructions {
+    position: absolute;
+    top: 60px;
+    /* Moved down to avoid overlap */
+    left: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
     font-size: 0.8rem;
+    pointer-events: none;
+    backdrop-filter: blur(2px);
+}
+
+#nicknameInput {
+    width: 100px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--border-color);
+    color: white;
+    border-radius: 20px;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    outline: none;
+    pointer-events: auto;
+    transition: all 0.2s;
+}
+
+#nicknameInput:focus {
+    background: rgba(0, 0, 0, 0.9);
+    border-color: var(--accent);
 }
 
 /* Cursors */
@@ -306,17 +329,5 @@ html {
     border: 1px solid rgba(255, 255, 255, 0.8);
     box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4);
     /* Dim outside */
-    pointer-events: none;
-}
-
-.instructions {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    color: rgba(255, 255, 255, 0.5);
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 0.8rem;
     pointer-events: none;
 }
