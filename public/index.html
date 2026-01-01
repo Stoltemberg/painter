@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giant Pixel Board V2</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="coords" id="coords">X: 0, Y: 0</div>
+            <div class="online-count" id="onlineCount">● 1 Online</div>
+        </div>
+
+        <div class="palette">
+            <input type="color" id="colorPicker" value="#000000">
+            <div class="tools">
+                <button id="resetView" title="Reset View">🏠</button>
+            </div>
+            <div id="status">Connecting...</div>
+        </div>
+
+        <div class="minimap-container">
+            <canvas id="minimap"></canvas>
+            <div id="minimap-viewport"></div>
+        </div>
+
+        <div class="instructions">
+            Left Click: Paint | Right Click/Drag: Pan | Wheel: Zoom
+        </div>
+    </div>
+
+    <canvas id="board"></canvas>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>

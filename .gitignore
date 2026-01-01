@@ -1,0 +1,4 @@
+node_modules/
+board.json
+.env
+.DS_Store
