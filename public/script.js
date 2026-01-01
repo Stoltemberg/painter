@@ -9,11 +9,18 @@ const minimapViewport = document.getElementById('minimap-viewport');
 const colorPicker = document.getElementById('colorPicker');
 const recentColorsDiv = document.getElementById('recentColors');
 const eraserBtn = document.getElementById('eraserBtn');
-const statusDiv = document.getElementById('status');
+const exportBtn = document.getElementById('exportBtn');
+const soundBtn = document.getElementById('soundBtn');
 const resetBtn = document.getElementById('resetView');
+const teleX = document.getElementById('teleX');
+const teleY = document.getElementById('teleY');
+const teleBtn = document.getElementById('teleBtn');
+const statusDiv = document.getElementById('status');
 const coordsDiv = document.getElementById('coords');
 const onlineCountDiv = document.getElementById('onlineCount');
 const cursorLayer = document.getElementById('cursor-layer');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
 
 // State
 let boardSize = 3000;
@@ -24,8 +31,13 @@ let isDragging = false;
 let isPainting = false;
 let lastX = 0;
 let lastY = 0;
-let currentMode = 'brush'; // 'brush' or 'eraser'
-let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff']; // Defaults
+let currentMode = 'brush';
+let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
+let soundEnabled = true;
+
+// Audio Context
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
 
 // Cursors Map
 const cursors = {}; // id -> element
@@ -38,7 +50,79 @@ bufferCanvas.height = boardSize;
 bufferCtx.fillStyle = '#ffffff';
 bufferCtx.fillRect(0, 0, boardSize, boardSize);
 
-// --- Inputs ---
+// --- Sound Effects ---
+function playPop() {
+    if (!soundEnabled || audioCtx.state === 'suspended') {
+        if (soundEnabled) audioCtx.resume();
+        return;
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800 + Math.random() * 200, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
+if (soundBtn) {
+    soundBtn.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+    });
+}
+
+// --- Export Image ---
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = `pixel-board-${Date.now()}.png`;
+        link.href = bufferCanvas.toDataURL('image/png');
+        link.click();
+    });
+}
+
+// --- Teleport ---
+if (teleBtn) {
+    teleBtn.addEventListener('click', () => {
+        const x = parseInt(teleX.value) || 0;
+        const y = parseInt(teleY.value) || 0;
+        // Center view on X, Y
+        offsetX = x - (canvas.width / 2) / scale;
+        offsetY = y - (canvas.height / 2) / scale;
+        draw();
+        updateMinimapViewport();
+    });
+}
+
+// --- Chat ---
+if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const text = chatInput.value.trim();
+            if (text) {
+                socket.emit('chat', { text });
+                chatInput.value = '';
+            }
+        }
+    });
+}
+
+function addChatMessage(text, isMe = false) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.textContent = text;
+    if (isMe) div.style.background = 'rgba(74, 222, 128, 0.5)';
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// --- Inputs & Palette ---
 if (eraserBtn) {
     eraserBtn.addEventListener('click', () => {
         currentMode = 'eraser';
@@ -61,12 +145,9 @@ if (colorPicker) {
         canvas.style.cursor = 'crosshair';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
     });
-    colorPicker.addEventListener('change', () => {
-        addRecentColor(colorPicker.value);
-    });
+    colorPicker.addEventListener('change', () => addRecentColor(colorPicker.value));
 }
 
-// Recent Colors Logic
 function addRecentColor(hex) {
     if (!recentColors.includes(hex)) {
         recentColors.unshift(hex);
@@ -86,7 +167,7 @@ function updateRecentColorsUI() {
         recentColorsDiv.appendChild(swatch);
     });
 }
-updateRecentColorsUI(); // Init
+updateRecentColorsUI();
 
 // --- Resize Handling ---
 function resize() {
@@ -119,7 +200,6 @@ function draw() {
     }
     ctx.restore();
 
-    // Update Cursors Position (Keep them in sync with view)
     updateCursors();
 }
 
@@ -140,16 +220,10 @@ function drawGrid(ctx, vx, vy, vw, vh) {
 
 // --- Cursor Logic ---
 function updateCursors() {
-    // Need to map World Coordinates -> Screen Coordinates
-    // Screen = (World - Offset) * Scale
-
-    // transform: translate(...)
-    // We update the DOM elements directly
     for (const id in cursors) {
         const cursor = cursors[id];
         const screenX = (cursor.worldX - offsetX) * scale;
         const screenY = (cursor.worldY - offsetY) * scale;
-
         cursor.element.style.transform = `translate(${screenX}px, ${screenY}px)`;
     }
 }
@@ -181,6 +255,9 @@ function screenToWorld(sx, sy) {
 
 // --- Mouse Events ---
 canvas.addEventListener('mousedown', e => {
+    // Resume audio context on user gesture
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
     if (e.button === 0) {
         isPainting = true;
         paint(e.clientX, e.clientY);
@@ -193,14 +270,16 @@ canvas.addEventListener('mousedown', e => {
 });
 
 let lastCursorEmit = 0;
+let lastPaintEmit = 0;
+
 canvas.addEventListener('mousemove', e => {
     const { x, y } = screenToWorld(e.clientX, e.clientY);
     if (coordsDiv) coordsDiv.textContent = `X: ${x}, Y: ${y}`;
 
     // Emit Cursor Position
     const now = Date.now();
-    if (now - lastCursorEmit > 50) { // Throttle 20fps
-        socket.emit('cursor', { x: x + 0.5, y: y + 0.5 }); // +0.5 to center
+    if (now - lastCursorEmit > 50) {
+        socket.emit('cursor', { x: x + 0.5, y: y + 0.5 });
         lastCursorEmit = now;
     }
 
@@ -210,10 +289,8 @@ canvas.addEventListener('mousemove', e => {
     if (isDragging) {
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
-
-        offsetX -= dx / scale;
         offsetY -= dy / scale;
-
+        offsetX -= dx / scale;
         lastX = e.clientX;
         lastY = e.clientY;
         draw();
@@ -267,10 +344,13 @@ if (resetBtn) {
 
 // --- Painting ---
 function paint(clientX, clientY) {
+    const now = Date.now();
+    // Frontend Rate Limit (matching backend roughly)
+    if (now - lastPaintEmit < 15) return;
+
     const { x, y } = screenToWorld(clientX, clientY);
     if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
         let r, g, b;
-
         if (currentMode === 'eraser') {
             r = 255; g = 255; b = 255;
         } else {
@@ -282,15 +362,15 @@ function paint(clientX, clientY) {
         }
 
         drawPixel(x, y, r, g, b);
+        playPop(); // Local sound
         socket.emit('pixel', { x, y, r, g, b, size: 1 });
+        lastPaintEmit = now;
     }
 }
 
 function drawPixel(x, y, r, g, b) {
-    // Fill 1x1
     bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
     bufferCtx.fillRect(x, y, 1, 1);
-
     draw();
 
     minimapCtx.fillStyle = `rgb(${r},${g},${b})`;
@@ -336,24 +416,15 @@ socket.on('init', (buffer) => {
 
 socket.on('pixel', (data) => {
     drawPixel(data.x, data.y, data.r, data.g, data.b);
+    playPop(); // Remote sound
 });
 
 socket.on('cursor', (data) => {
-    // data: { id, x, y }
     if (!cursors[data.id]) {
-        // Create new cursor element
         const el = document.createElement('div');
         el.className = 'cursor';
-
-        // Random color for cursor?
         const hue = Math.floor(Math.random() * 360);
         el.style.borderBottomColor = `hsl(${hue}, 100%, 50%)`;
-
-        // Label (optional)
-        const label = document.createElement('div');
-        label.className = 'cursor-label';
-        label.textContent = 'Player';
-        el.appendChild(label);
 
         cursorLayer.appendChild(el);
         cursors[data.id] = { element: el, worldX: data.x, worldY: data.y };
@@ -361,12 +432,6 @@ socket.on('cursor', (data) => {
         cursors[data.id].worldX = data.x;
         cursors[data.id].worldY = data.y;
     }
-    // Update visual position
-    // (We do this in draw loop too, but nice to do immediately)
-    const cursor = cursors[data.id];
-    const screenX = (cursor.worldX - offsetX) * scale;
-    const screenY = (cursor.worldY - offsetY) * scale;
-    cursor.element.style.transform = `translate(${screenX}px, ${screenY}px)`;
 });
 
 socket.on('cursor_disconnect', (id) => {
@@ -378,4 +443,8 @@ socket.on('cursor_disconnect', (id) => {
 
 socket.on('online_count', (count) => {
     if (onlineCountDiv) onlineCountDiv.textContent = `● ${count} Online`;
+});
+
+socket.on('chat', (msg) => {
+    addChatMessage(msg.text, msg.id === socket.id);
 });
