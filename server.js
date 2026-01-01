@@ -131,17 +131,35 @@ io.on('connection', (socket) => {
     socket.emit('init', board);
 
     socket.on('pixel', (data) => {
-        const { x, y, r, g, b } = data;
-        if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT) {
-            const index = (y * BOARD_WIDTH + x) * 3;
-            // Diff check
-            if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
-                board[index] = r;
-                board[index + 1] = g;
-                board[index + 2] = b;
-                needsSave = true;
-                socket.broadcast.emit('pixel', { x, y, r, g, b });
+        const { x, y, r, g, b, size = 1 } = data; // Default size 1
+
+        // Calculate bounds for the brush (centered at x, y)
+        const half = Math.floor(size / 2);
+        const startX = Math.max(0, x - half);
+        const startY = Math.max(0, y - half);
+        const endX = Math.min(BOARD_WIDTH, x - half + size);
+        const endY = Math.min(BOARD_HEIGHT, y - half + size);
+
+        let changed = false;
+
+        for (let py = startY; py < endY; py++) {
+            for (let px = startX; px < endX; px++) {
+                const index = (py * BOARD_WIDTH + px) * 3;
+
+                // Only update if color is different (and valid index)
+                if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
+                    board[index] = r;
+                    board[index + 1] = g;
+                    board[index + 2] = b;
+                    changed = true;
+                }
             }
+        }
+
+        if (changed) {
+            needsSave = true;
+            // Broadcast the brush stroke itself, let clients handle the loop aka "drawRect"
+            socket.broadcast.emit('pixel', { x, y, r, g, b, size });
         }
     });
 

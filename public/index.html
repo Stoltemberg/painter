@@ -17,8 +17,17 @@
         </div>
 
         <div class="palette">
-            <input type="color" id="colorPicker" value="#000000">
+            <div class="color-section">
+                <input type="color" id="colorPicker" value="#000000">
+            </div>
+
+            <div class="brush-controls">
+                <input type="range" id="brushSize" min="1" max="20" value="1" title="Brush Size">
+                <span id="brushSizeLabel">1px</span>
+            </div>
+
             <div class="tools">
+                <button id="eraserBtn" title="Eraser">🧽</button>
                 <button id="resetView" title="Reset View">🏠</button>
             </div>
             <div id="status">Connecting...</div>

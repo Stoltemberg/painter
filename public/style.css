@@ -50,31 +50,61 @@ html {
 }
 
 /* Palette */
+/* Palette */
 .palette {
     position: absolute;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(30, 30, 30, 0.9);
-    padding: 10px 25px;
-    border-radius: 50px;
+    padding: 10px 20px;
+    border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.color-section {
+    display: flex;
+    align-items: center;
+}
+
 #colorPicker {
     border: none;
-    width: 45px;
-    height: 45px;
+    width: 40px;
+    height: 40px;
     background: none;
     cursor: pointer;
-    border-radius: 50%;
-    /* Attempt to round the input, works on some browsers */
+    padding: 0;
+}
+
+.brush-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0 15px;
+}
+
+#brushSize {
+    width: 80px;
+    cursor: pointer;
+}
+
+#brushSizeLabel {
+    font-size: 0.8rem;
+    color: #ccc;
+    min-width: 30px;
+}
+
+.tools {
+    display: flex;
+    gap: 8px;
 }
 
 .tools button {
