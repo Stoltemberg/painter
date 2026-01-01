@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giant Pixel Board V2</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -21,17 +23,30 @@
                 <input type="color" id="colorPicker" value="#000000">
             </div>
 
-            <div class="brush-controls">
-                <input type="range" id="brushSize" min="1" max="20" value="1" title="Brush Size">
-                <span id="brushSizeLabel">1px</span>
-            </div>
+            <div id="recentColors" class="recent-colors"></div>
 
             <div class="tools">
                 <button id="eraserBtn" title="Eraser">🧽</button>
+                <button id="exportBtn" title="Export Image">📸</button>
+                <button id="soundBtn" title="Toggle Sound">🔊</button>
                 <button id="resetView" title="Reset View">🏠</button>
             </div>
+
+            <div class="teleport-bar">
+                <input type="number" id="teleX" placeholder="X" min="0" max="3000">
+                <input type="number" id="teleY" placeholder="Y" min="0" max="3000">
+                <button id="teleBtn">Go</button>
+            </div>
+
             <div id="status">Connecting...</div>
         </div>
+
+        <div id="chat-container">
+            <div id="chat-messages"></div>
+            <input type="text" id="chat-input" placeholder="Say hello..." maxlength="100">
+        </div>
+
+        <div id="cursor-layer"></div>
 
         <div class="minimap-container">
             <canvas id="minimap"></canvas>
