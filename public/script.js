@@ -100,15 +100,30 @@ if (teleBtn) {
     });
 }
 
-// --- Chat ---
+// --- Chat Logic ---
 if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
+    // Global Enter Listener
+    window.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            const text = chatInput.value.trim();
-            if (text) {
-                socket.emit('chat', { text });
-                chatInput.value = '';
+            if (document.activeElement === chatInput) {
+                // Send message logic
+                const text = chatInput.value.trim();
+                if (text) {
+                    socket.emit('chat', { text });
+                    chatInput.value = '';
+                }
+                chatInput.blur(); // Close chat focus
+                canvas.focus(); // Return focus to canvas/body
+            } else {
+                // Open chat logic
+                e.preventDefault();
+                chatInput.focus();
             }
+        }
+
+        // Escape to cancel/close
+        if (e.key === 'Escape' && document.activeElement === chatInput) {
+            chatInput.blur();
         }
     });
 }
@@ -118,8 +133,13 @@ function addChatMessage(text, isMe = false) {
     div.className = 'chat-msg';
     div.textContent = text;
     if (isMe) div.style.background = 'rgba(74, 222, 128, 0.5)';
+
+    // Auto-scroll
+    const wasatBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 50;
     chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (wasatBottom || isMe) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 }
 
 // --- Inputs & Palette ---
@@ -255,8 +275,11 @@ function screenToWorld(sx, sy) {
 
 // --- Mouse Events ---
 canvas.addEventListener('mousedown', e => {
-    // Resume audio context on user gesture
+    // Resume audio context
     if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Prevent drawing if chat is focused
+    if (document.activeElement === chatInput) return;
 
     if (e.button === 0) {
         isPainting = true;

@@ -15,6 +15,68 @@ html {
     cursor: crosshair;
 }
 
+/* Chat */
+#chat-container {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    width: 320px;
+    height: 250px;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    /* Let clicks pass through empty space */
+    z-index: 50;
+    /* Top most */
+}
+
+#chat-messages {
+    flex-grow: 1;
+    overflow-y: hidden;
+    /* Hide scrollbar usually */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 10px;
+    /* readable text against any background */
+    text-shadow: 1px 1px 2px black, 0 0 1em blue, 0 0 0.2em blue;
+}
+
+.chat-msg {
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    align-self: flex-start;
+    animation: fadein 0.2s;
+    max-width: 90%;
+    pointer-events: auto;
+    /* Enable copying text */
+    word-wrap: break-word;
+}
+
+#chat-input {
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 20px;
+    outline: none;
+    pointer-events: auto;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+#chat-input:focus {
+    opacity: 1;
+    border-color: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+}
+
 #ui-layer {
     position: absolute;
     top: 0;
