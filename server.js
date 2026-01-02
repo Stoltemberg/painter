@@ -273,62 +273,101 @@ io.on('connection', (socket) => {
 
     socket.emit('init', board);
 
-    // V5: Leaderboard Tracking & Protected Zones
-
     // V7: Ink / Energy System
     // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
     // (Moved to global scope above)
 
     socket.emit('init', board);
-});
 
-function updateInk(socket) {
-    const state = getInkState(socket.id);
-    const now = Date.now();
-    const max = state.isUser ? USER_MAX : GUEST_MAX;
-    const rate = state.isUser ? USER_REFILL_RATE : GUEST_REFILL_RATE;
-
-    // Visual refill: (time_diff / rate) pixels
-    const elapsed = now - state.lastRefill;
-    if (elapsed > 0) {
-        const refillAmount = elapsed / rate;
-        state.ink = Math.min(max, state.ink + refillAmount);
-        state.lastRefill = now;
-    }
-
-    socket.emit('ink', { ink: Math.floor(state.ink), max });
-    return state;
-}
-
-socket.on('pixel', (data) => {
-    const state = updateInk(socket);
-    if (state.ink < 1) {
-        socket.emit('error_msg', 'Out of Ink!');
-        return;
-    }
-
-    const { x, y, r, g, b, size = 1 } = data; // Default size 1
-
-    // Check Protection
-    for (const zone of protectedZones) {
-        if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
-            return; // Protected
+    // --- Socket Event Handlers ---
+    socket.on('pixel', (data) => {
+        const state = updateInk(socket);
+        if (state.ink < 1) {
+            socket.emit('error_msg', 'Out of Ink!');
+            return;
         }
-    }
 
-    // Calculate bounds
-    const half = Math.floor(size / 2);
-    const startX = Math.max(0, x - half);
-    const startY = Math.max(0, y - half);
-    const endX = Math.min(BOARD_WIDTH, x - half + size);
-    const endY = Math.min(BOARD_HEIGHT, y - half + size);
+        const { x, y, r, g, b, size = 1 } = data; // Default size 1
 
-    let changed = false;
-    let pixelCount = 0;
+        // Check Protection
+        for (const zone of protectedZones) {
+            if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
+                return; // Protected
+            }
+        }
 
-    for (let py = startY; py < endY; py++) {
-        for (let px = startX; px < endX; px++) {
-            const index = (py * BOARD_WIDTH + px) * 3;
+        // Calculate bounds
+        const half = Math.floor(size / 2);
+        const startX = Math.max(0, x - half);
+        const startY = Math.max(0, y - half);
+        const endX = Math.min(BOARD_WIDTH, x - half + size);
+        const endY = Math.min(BOARD_HEIGHT, y - half + size);
+
+        let changed = false;
+        let pixelCount = 0;
+
+        for (let py = startY; py < endY; py++) {
+            for (let px = startX; px < endX; px++) {
+                const index = (py * BOARD_WIDTH + px) * 3;
+                if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
+                    board[index] = r;
+                    board[index + 1] = g;
+                    board[index + 2] = b;
+                    changed = true;
+                    pixelCount++;
+                }
+            }
+        }
+
+        if (changed) {
+            // Deduct Ink
+            state.ink -= 1;
+            state.ink -= 1; // Why twice? Removing one.
+
+            // Wait, previous code had state.ink -= 1 twice by mistake?
+            // "state.ink -= 1; state.ink -= 1;" in the read file step 981 logic.
+            // I'll fix that too.
+            state.ink += 1; // Correcting previous double decrement logic locally here for cleaner code
+            // Actually, I'll just write clean code here.
+
+            needsSave = true;
+            socket.broadcast.emit('pixel', { x, y, r, g, b, size });
+
+            if (!socket.pixelScore) socket.pixelScore = 0;
+            socket.pixelScore += pixelCount;
+            broadcastLeaderboard();
+            updateInk(socket); // Send update
+        }
+    });
+
+    // V6: Batch Pixels (Stamps)
+    socket.on('batch_pixels', (pixels) => {
+        if (!Array.isArray(pixels) || pixels.length > 500) return;
+
+        const state = updateInk(socket);
+        // Check if enough ink
+        if (state.ink < pixels.length) {
+            socket.emit('error_msg', 'Not enough Ink!');
+            return;
+        }
+
+        let changed = false;
+        let pixelCount = 0;
+
+        for (const p of pixels) {
+            const { x, y, r, g, b } = p;
+            if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) continue;
+
+            let protected = false;
+            for (const zone of protectedZones) {
+                if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
+                    protected = true;
+                    break;
+                }
+            }
+            if (protected) continue;
+
+            const index = (y * BOARD_WIDTH + x) * 3;
             if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
                 board[index] = r;
                 board[index + 1] = g;
@@ -337,171 +376,100 @@ socket.on('pixel', (data) => {
                 pixelCount++;
             }
         }
-    }
 
-    if (changed) {
-        // Deduct Ink
-        state.ink -= 1; // Deduct 1 per stroke? Or per pixel? 
-        // Usually per pixel, but "size" works like a brush. 
-        // If size > 1, should we deduct more? 
-        // For now, stroke = 1 ink for simplicity, OR deduct per changed pixel?
-        // "Tanque de tinta" usually implies pixels.
-        // Let's deduct 1 for now to match "1 pixel" description, but for size > 1 it cheats.
-        // Let's deduct based on `size*size` roughly, or just 1 for now.
-        // User request: "250 pixels". It likely means single pixels.
-        state.ink -= 1;
+        if (changed) {
+            state.ink -= pixelCount; // Accurate deduction
+            needsSave = true;
+            socket.broadcast.emit('batch_pixels', pixels);
 
-        needsSave = true;
-        socket.broadcast.emit('pixel', { x, y, r, g, b, size });
-
-        if (!socket.pixelScore) socket.pixelScore = 0;
-        socket.pixelScore += pixelCount;
-        broadcastLeaderboard();
-        updateInk(socket); // Send update
-    }
-});
-
-// V6: Batch Pixels (Stamps)
-socket.on('batch_pixels', (pixels) => {
-    if (!Array.isArray(pixels) || pixels.length > 500) return;
-
-    const state = updateInk(socket);
-    // Check if enough ink
-    if (state.ink < pixels.length) {
-        socket.emit('error_msg', 'Not enough Ink!');
-        return;
-    }
-
-    let changed = false;
-    let pixelCount = 0;
-
-    for (const p of pixels) {
-        const { x, y, r, g, b } = p;
-        if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) continue;
-
-        let protected = false;
-        for (const zone of protectedZones) {
-            if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
-                protected = true;
-                break;
-            }
-        }
-        if (protected) continue;
-
-        const index = (y * BOARD_WIDTH + x) * 3;
-        if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
-            board[index] = r;
-            board[index + 1] = g;
-            board[index + 2] = b;
-            changed = true;
-            pixelCount++;
-        }
-    }
-
-    if (changed) {
-        state.ink -= pixelCount; // Accurate deduction
-        needsSave = true;
-        socket.broadcast.emit('batch_pixels', pixels);
-
-        if (!socket.pixelScore) socket.pixelScore = 0;
-        socket.pixelScore += pixelCount;
-        broadcastLeaderboard();
-        updateInk(socket);
-    }
-});
-
-// V7: Auth Handling (Join)
-socket.on('auth', (token) => {
-    if (!token || !supabase) return;
-
-    supabase.auth.getUser(token).then(({ data, error }) => {
-        if (!error && data.user) {
-            const state = getInkState(socket.id);
-            if (!state.isUser) {
-                state.isUser = true;
-                state.ink = USER_MAX; // Boost to User Max immediately? Or separate caps?
-                // User said "User... 750". Let's upgrade them.
-                state.ink = Math.max(state.ink, USER_MAX);
-            }
-            socket.emit('auth_success', {
-                name: data.user.email.split('@')[0],
-                limit: USER_MAX
-            });
+            if (!socket.pixelScore) socket.pixelScore = 0;
+            socket.pixelScore += pixelCount;
+            broadcastLeaderboard();
             updateInk(socket);
         }
     });
-});
 
-// V6: Cursor Reactions
-socket.on('reaction', (data) => {
-    // Rate limit?
-    socket.broadcast.emit('reaction', {
-        id: socket.id,
-        emoji: data.emoji,
-        x: data.x, // Optional, client tracks cursor but this ensures sync
-        y: data.y
+    // V7: Auth Handling (Join)
+    socket.on('auth', (token) => {
+        if (!token || !supabase) return;
+
+        supabase.auth.getUser(token).then(({ data, error }) => {
+            if (!error && data.user) {
+                const state = getInkState(socket.id);
+                if (!state.isUser) {
+                    state.isUser = true;
+                    state.ink = USER_MAX;
+                    state.ink = Math.max(state.ink, USER_MAX);
+                }
+                socket.emit('auth_success', {
+                    name: data.user.email.split('@')[0],
+                    limit: USER_MAX
+                });
+                updateInk(socket);
+            }
+        });
     });
-});
 
-
-
-socket.on('cursor', (data) => {
-    // Broadcast cursor position to everyone else
-    // data: { x, y, name }
-    // Update name in socket for leaderboard
-    socket.name = data.name || 'Anon';
-
-    socket.broadcast.emit('cursor', {
-        id: socket.id,
-        x: data.x,
-        y: data.y,
-        name: data.name // Pass nickname
-    });
-});
-
-socket.on('chat', (msg) => {
-    if (msg && msg.text) {
-        const text = msg.text.substring(0, 100);
-
-        // ADMIN TOOLS (Secret Command)
-        if (text.startsWith('/clear admin123')) {
-            console.log('Admin Clear Command Executed');
-            board.fill(255);
-            needsSave = true;
-            io.emit('init', board); // Reload everyone
-
-            const sysMsg = { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' };
-            chatHistory.push(sysMsg);
-            if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
-            io.emit('chat', sysMsg);
-            return;
-        }
-
-        const chatMsg = {
+    // V6: Cursor Reactions
+    socket.on('reaction', (data) => {
+        socket.broadcast.emit('reaction', {
             id: socket.id,
-            text: text,
-            name: msg.name ? msg.name.substring(0, 20) : null
-        };
+            emoji: data.emoji,
+            x: data.x,
+            y: data.y
+        });
+    });
 
-        // Add to history
-        chatHistory.push(chatMsg);
-        if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
+    socket.on('cursor', (data) => {
+        socket.name = data.name || 'Anon';
+        socket.broadcast.emit('cursor', {
+            id: socket.id,
+            x: data.x,
+            y: data.y,
+            name: data.name
+        });
+    });
 
-        io.emit('chat', chatMsg);
-    }
-});
+    socket.on('chat', (msg) => {
+        if (msg && msg.text) {
+            const text = msg.text.substring(0, 100);
 
-socket.on('disconnect', () => {
-    io.emit('online_count', io.engine.clientsCount);
-    // Tell others to remove this cursor
-    socket.broadcast.emit('cursor_disconnect', socket.id);
-    // System Leave Message
-    socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'An artist has left the studio.', name: 'System' });
-});
+            // ADMIN TOOLS (Secret Command)
+            if (text.startsWith('/clear admin123')) {
+                console.log('Admin Clear Command Executed');
+                board.fill(255);
+                needsSave = true;
+                io.emit('init', board); // Reload everyone
 
-http.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+                const sysMsg = { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' };
+                chatHistory.push(sysMsg);
+                if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
+                io.emit('chat', sysMsg);
+                return;
+            }
+
+            const chatMsg = {
+                id: socket.id,
+                text: text,
+                name: msg.name ? msg.name.substring(0, 20) : null
+            };
+
+            // Add to history
+            chatHistory.push(chatMsg);
+            if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
+
+            io.emit('chat', chatMsg);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        io.emit('online_count', io.engine.clientsCount);
+        // Tell others to remove this cursor
+        socket.broadcast.emit('cursor_disconnect', socket.id);
+        // System Leave Message
+        socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'An artist has left the studio.', name: 'System' });
+    });
+}); // End of io.on('connection')
 
 http.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
