@@ -1112,11 +1112,6 @@ async function initSupabase() {
                 return;
             }
 
-            console.log('window.supabase type:', typeof window.supabase);
-            console.log('window.supabase keys:', Object.keys(window.supabase));
-            if (window.supabase.default) console.log('window.supabase.default keys:', Object.keys(window.supabase.default));
-
-            // Try to find createClient
             // Try to find createClient
             try {
                 if (window.supabase && typeof window.supabase.createClient === 'function') {
@@ -1128,7 +1123,6 @@ async function initSupabase() {
                 } else if (typeof window.createClient === 'function') {
                     supabase = window.createClient(config.supabaseUrl, config.supabaseKey);
                 } else {
-                    console.error('Supabase Globals:', window.supabase);
                     throw new Error('Could not find createClient. Check console for window.supabase structure.');
                 }
             } catch (err) {
