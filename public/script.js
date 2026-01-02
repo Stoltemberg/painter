@@ -675,6 +675,7 @@ async function initSupabase() {
 
             // Auth Listener
             supabase.auth.onAuthStateChange((event, session) => {
+                console.log('Auth State Change:', event, session);
                 if (session) handleUser(session.user);
             });
         }

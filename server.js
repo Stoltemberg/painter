@@ -403,7 +403,7 @@ io.on('connection', (socket) => {
 
         supabase.auth.getUser(token).then(({ data, error }) => {
             if (!error && data.user) {
-                const state = getInkState(socket.id);
+                const state = getInkState(socket);
                 if (!state.isUser) {
                     state.isUser = true;
                     state.ink = USER_MAX;
