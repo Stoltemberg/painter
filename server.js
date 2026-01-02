@@ -354,16 +354,36 @@ io.on('connection', (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
 
-    // Send Compressed Board
-    try {
-        const compressed = getCompressedBoard();
-        socket.emit('init', compressed);
+    // 1. Send Metadata
+    socket.emit('board_info', { width: BOARD_WIDTH, height: BOARD_HEIGHT });
 
-        // Explicitly clear var to hint GC? No, it's scoped.
-    } catch (e) {
-        console.error('Compression error:', e);
-        socket.emit('init', board); // Fallback
-    }
+    // 2. Send Chunks Sequentially (RAW - No Compression)
+    const totalChunks = Math.ceil(BOARD_HEIGHT / CHUNK_LINES);
+
+    const sendChunks = async () => {
+        for (let i = 0; i < totalChunks; i++) {
+            if (!socket.connected) return;
+
+            const startY = i * CHUNK_LINES;
+            const endY = Math.min(startY + CHUNK_LINES, BOARD_HEIGHT);
+
+            const startByte = startY * BOARD_WIDTH * 3;
+            const endByte = endY * BOARD_WIDTH * 3;
+
+            const slice = board.subarray(startByte, endByte);
+
+            socket.emit('board_chunk', {
+                y: startY,
+                height: endY - startY,
+                data: slice,
+                progress: (i + 1) / totalChunks
+            });
+
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+    };
+
+    sendChunks().catch(e => console.error('Chunk send error:', e));
 
     // Send Chat History
     socket.emit('chat_history', chatHistory);
