@@ -72,6 +72,8 @@ const pipetteBtn = document.getElementById('pipetteBtn'); // V3
 const stampBtn = document.getElementById('stampBtn'); // V6
 const stampOptions = document.getElementById('stampOptions'); // V6
 const stampOpts = document.querySelectorAll('.stamp-opt'); // V6
+const fillBtn = document.getElementById('fillBtn');
+const lineBtn = document.getElementById('lineBtn');
 const exportBtn = document.getElementById('exportBtn');
 const soundBtn = document.getElementById('soundBtn');
 // ... other DOM elements ...
@@ -142,16 +144,46 @@ if (pipetteBtn) {
 
 if (stampBtn) {
     stampBtn.addEventListener('click', () => {
-        // TEMP: Just a toggle for now, no UI for picking stamps yet
         currentMode = 'stamp';
-        canvas.style.cursor = 'grab'; // Placeholder cursor
+        canvas.style.cursor = 'grab';
         stampBtn.style.border = '2px solid #4ade80';
+        stampOptions.classList.remove('hidden'); // Show options
 
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
+        if (lineBtn) lineBtn.style.border = '1px solid #555';
+    });
+}
 
-        // alert('Stamp Tool selected! (Logic to select shape implementing...)');
+if (fillBtn) {
+    fillBtn.addEventListener('click', () => {
+        currentMode = 'fill';
+        canvas.style.cursor = 'alias';
+        fillBtn.style.border = '2px solid #4ade80';
+
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
+        if (lineBtn) lineBtn.style.border = '1px solid #555';
+        if (stampOptions) stampOptions.classList.add('hidden');
+    });
+}
+
+if (lineBtn) {
+    lineBtn.addEventListener('click', () => {
+        currentMode = 'line';
+        canvas.style.cursor = 'crosshair';
+        lineBtn.style.border = '2px solid #4ade80';
+
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
+        if (stampOptions) stampOptions.classList.add('hidden');
     });
 }
 

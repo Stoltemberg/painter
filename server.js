@@ -541,6 +541,9 @@ io.on('connection', async (socket) => {
                 broadcastLeaderboardLegacy();
             }
 
+            // Sync score back to client immediately
+            socket.emit('pixel_score', socket.pixelScore);
+
             updateInk(socket); // Send update
         }
     });
@@ -605,7 +608,22 @@ io.on('connection', async (socket) => {
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
-            broadcastLeaderboard();
+
+            // Queue for Sync
+            if (supabase && socket.guestId) {
+                dirtyScores.set(socket.guestId, {
+                    id: socket.guestId,
+                    name: socket.name || 'Guest',
+                    score: socket.pixelScore,
+                    team: TEAMS[(pixels[0].t || 0)] || 'none'
+                });
+            } else {
+                broadcastLeaderboardLegacy();
+            }
+
+            // Sync score back to client immediately
+            socket.emit('pixel_score', socket.pixelScore);
+
             updateInk(socket);
         }
     });
