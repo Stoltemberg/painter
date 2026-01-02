@@ -10,7 +10,8 @@ const colorPicker = document.getElementById('colorPicker');
 const recentColorsDiv = document.getElementById('recentColors');
 const brushBtn = document.getElementById('brushBtn');
 const eraserBtn = document.getElementById('eraserBtn');
-const pipetteBtn = document.getElementById('pipetteBtn'); // New
+const pipetteBtn = document.getElementById('pipetteBtn');
+const stampBtn = document.getElementById('stampBtn'); // New
 const exportBtn = document.getElementById('exportBtn');
 const soundBtn = document.getElementById('soundBtn');
 // ... other DOM elements ...
@@ -25,6 +26,7 @@ if (brushBtn) {
         brushBtn.style.border = '2px solid #4ade80';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
     });
 }
 
@@ -35,6 +37,7 @@ if (eraserBtn) {
         eraserBtn.style.border = '2px solid #4ade80';
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
     });
 }
 
@@ -45,6 +48,22 @@ if (pipetteBtn) {
         pipetteBtn.style.border = '2px solid #4ade80';
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
+    });
+}
+
+if (stampBtn) {
+    stampBtn.addEventListener('click', () => {
+        // TEMP: Just a toggle for now, no UI for picking stamps yet
+        currentMode = 'stamp';
+        canvas.style.cursor = 'grab'; // Placeholder cursor
+        stampBtn.style.border = '2px solid #4ade80';
+
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+
+        // alert('Stamp Tool selected! (Logic to select shape implementing...)');
     });
 }
 
@@ -490,6 +509,7 @@ let lastPaintEmit = 0;
 
 canvas.addEventListener('mousemove', e => {
     const { x, y } = screenToWorld(e.clientX, e.clientY);
+    lastWorldPos = { x, y }; // Track for Key Reactions
     if (coordsDiv) coordsDiv.textContent = `X: ${x}, Y: ${y}`;
 
     // Emit Cursor Position
@@ -596,6 +616,7 @@ function drawPixel(x, y, r, g, b) {
 }
 
 // --- Socket ---
+// --- Socket ---
 socket.on('connect', () => {
     if (statusDiv) {
         statusDiv.textContent = 'Connected';
@@ -634,6 +655,94 @@ socket.on('pixel', (data) => {
     drawPixel(data.x, data.y, data.r, data.g, data.b);
     playPop(); // Remote sound
 });
+
+// V6: Batch Pixels (Stamps)
+socket.on('batch_pixels', (pixels) => {
+    pixels.forEach(p => {
+        // Draw directly to buffer without full redraw (optimization)
+        bufferCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+        bufferCtx.fillRect(p.x, p.y, 1, 1);
+
+        // Minimap
+        minimapCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+        const mx = Math.floor(p.x / boardSize * 150);
+        const my = Math.floor(p.y / boardSize * 150);
+        minimapCtx.fillRect(mx, my, 1, 1);
+    });
+    draw(); // Redraw once at end
+    playPop();
+});
+
+// V6: Reactions (Emotes)
+socket.on('reaction', (data) => {
+    showReaction(data.x, data.y, data.emoji);
+});
+
+function showReaction(x, y, emoji) {
+    // Convert world to screen
+    const screenX = (x - offsetX) * scale;
+    const screenY = (y - offsetY) * scale;
+
+    const el = document.createElement('div');
+    el.textContent = emoji;
+    el.style.position = 'absolute';
+    el.style.left = `${screenX}px`;
+    el.style.top = `${screenY}px`;
+    el.style.fontSize = '2rem';
+    el.style.pointerEvents = 'none';
+    el.style.transition = 'all 1s ease-out';
+    el.style.zIndex = '1000';
+    el.style.textShadow = '0 2px 4px rgba(0,0,0,0.5)';
+
+    document.body.appendChild(el);
+
+    // Animate
+    requestAnimationFrame(() => {
+        el.style.transform = `translateY(-50px) scale(1.5)`;
+        el.style.opacity = '0';
+    });
+
+    setTimeout(() => {
+        document.body.removeChild(el);
+    }, 1000);
+}
+
+// Logic to emit reactions
+window.addEventListener('keydown', (e) => {
+    if (document.activeElement === chatInput || document.activeElement === nicknameInput) return;
+
+    let emoji = null;
+    if (e.key === '1') emoji = '❤️';
+    if (e.key === '2') emoji = '😂';
+    if (e.key === '3') emoji = '😎';
+    if (e.key === '4') emoji = '🔥';
+
+    if (emoji) {
+        // Get my mouse pos? We don't track it globally easily, 
+        // but we can assume center of screen or last known.
+        // Better: Mouse move listener tracks `lastX`, `lastY` (screen coords).
+        // `screenToWorld` uses `lastX` clientX.
+        // Wait, `lastX` in script is for Dragging. 
+        // Let's use `lastMouseX`, `lastMouseY` tracked in mousemove.
+
+        // We need X, Y in world coords.
+        // Let's emit what we have.
+        // If we don't have exact mouse pos from a global var, 
+        // we can assume the server knows our cursor? 
+        // Server knows `socket.lastX`. But reaction event payload needs it.
+        // Let's rely on `lastWorldX` and `lastWorldY` if we add them.
+
+        // Quick fix: Use the last known world coordinates from mousemove.
+        const { x, y } = lastWorldPos || { x: boardSize / 2, y: boardSize / 2 };
+
+        socket.emit('reaction', { emoji, x, y });
+        showReaction(x, y, emoji); // Show local instantly
+    }
+});
+
+let lastWorldPos = { x: 0, y: 0 };
+// Update mousemove to track headers
+
 
 socket.on('cursor', (data) => {
     if (!cursors[data.id]) {

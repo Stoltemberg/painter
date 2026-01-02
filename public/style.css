@@ -368,6 +368,13 @@ html {
     transform: translateY(-2px);
 }
 
+.separator {
+    width: 1px;
+    height: 30px;
+    background: var(--glass-border);
+    margin: 0 4px;
+}
+
 #status {
     font-size: 0.9rem;
     color: #aaa;

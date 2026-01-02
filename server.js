@@ -227,9 +227,6 @@ io.on('connection', (socket) => {
 
         // Check Protection
         for (const zone of protectedZones) {
-            // Check if center of brush is inside zone
-            // Improvement: Check if ANY part of brush is inside? 
-            // For now, center check is fast and sufficient for 1px brush.
             if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
                 return; // Protected
             }
@@ -270,6 +267,59 @@ io.on('connection', (socket) => {
             socket.pixelScore += pixelCount;
             broadcastLeaderboard();
         }
+    });
+
+    // V6: Batch Pixels (Stamps)
+    socket.on('batch_pixels', (pixels) => {
+        if (!Array.isArray(pixels) || pixels.length > 500) return; // Limit stamp size
+
+        let changed = false;
+        let pixelCount = 0;
+
+        // Process all pixels
+        for (const p of pixels) {
+            const { x, y, r, g, b } = p;
+            if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) continue;
+
+            // Check Protection
+            let protected = false;
+            for (const zone of protectedZones) {
+                if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
+                    protected = true;
+                    break;
+                }
+            }
+            if (protected) continue;
+
+            const index = (y * BOARD_WIDTH + x) * 3;
+            if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
+                board[index] = r;
+                board[index + 1] = g;
+                board[index + 2] = b;
+                changed = true;
+                pixelCount++;
+            }
+        }
+
+        if (changed) {
+            needsSave = true;
+            socket.broadcast.emit('batch_pixels', pixels);
+
+            if (!socket.pixelScore) socket.pixelScore = 0;
+            socket.pixelScore += pixelCount;
+            broadcastLeaderboard();
+        }
+    });
+
+    // V6: Cursor Reactions
+    socket.on('reaction', (data) => {
+        // Rate limit?
+        socket.broadcast.emit('reaction', {
+            id: socket.id,
+            emoji: data.emoji,
+            x: data.x, // Optional, client tracks cursor but this ensures sync
+            y: data.y
+        });
     });
 
 
