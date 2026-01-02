@@ -504,13 +504,20 @@ function drawGrid(ctx, vx, vy, vw, vh) {
     ctx.lineWidth = 0.5 / scale;
     ctx.strokeStyle = '#ddd';
 
-    const startX = Math.floor(vx);
-    const startY = Math.floor(vy);
-    const endX = Math.min(boardSize, startX + vw + 1);
-    const endY = Math.min(boardSize, startY + vh + 1);
+    // Clamp start/end to board size
+    const startX = Math.max(0, Math.floor(vx));
+    const startY = Math.max(0, Math.floor(vy));
+    const endX = Math.min(boardSize, Math.ceil(vx + vw));
+    const endY = Math.min(boardSize, Math.ceil(vy + vh));
 
-    for (let x = startX; x <= endX; x++) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
-    for (let y = startY; y <= endY; y++) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
+    for (let x = startX; x <= endX; x++) {
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+    }
+    for (let y = startY; y <= endY; y++) {
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+    }
     ctx.stroke();
 }
 
