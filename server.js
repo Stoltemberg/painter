@@ -224,19 +224,22 @@ const GUEST_REFILL_RATE = 15000; // 15s per pixel
 const USER_MAX = 750;
 const USER_REFILL_RATE = 10000; // 10s per pixel
 
-function getInkState(socketId) {
-    if (!userInk.has(socketId)) {
-        userInk.set(socketId, {
+function getInkState(socket) {
+    // Prefer guestId from query, fallback to socket.id (shouldn't happen with updated client)
+    const id = socket.handshake.query.guestId || socket.id;
+
+    if (!userInk.has(id)) {
+        userInk.set(id, {
             ink: GUEST_MAX,
             lastRefill: Date.now(),
             isUser: false
         });
     }
-    return userInk.get(socketId);
+    return userInk.get(id);
 }
 
 function updateInk(socket) {
-    const state = getInkState(socket.id);
+    const state = getInkState(socket); // Pass socket object now
     const now = Date.now();
     const max = state.isUser ? USER_MAX : GUEST_MAX;
     const rate = state.isUser ? USER_REFILL_RATE : GUEST_REFILL_RATE;
@@ -249,7 +252,12 @@ function updateInk(socket) {
         state.lastRefill = now;
     }
 
-    socket.emit('ink', { ink: Math.floor(state.ink), max });
+    // Emit rate for client animation
+    socket.emit('ink', {
+        ink: Math.floor(state.ink),
+        max,
+        rate
+    });
     return state;
 }
 
