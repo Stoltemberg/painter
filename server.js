@@ -113,7 +113,7 @@ app.get('/api/config', (req, res) => {
     // Return only public anon key
     res.json({
         supabaseUrl: process.env.SUPABASE_URL,
-        supabaseKey: process.env.SUPABASE_KEY
+        supabaseKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY
     });
 });
 
