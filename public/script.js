@@ -844,43 +844,56 @@ socket.on('auth_success', (data) => {
     // Maybe show name in UI?
 });
 
-socket.on('init', (buffer) => {
-    if (statusDiv) statusDiv.textContent = 'Decanting pixels...';
+socket.on('board_info', (info) => {
+    console.log('Board info received:', info);
+    // Could update boardSize dynamically here if we wanted
+});
 
-    let data = buffer;
-    // Attempt Decompression
+socket.on('board_chunk', (chunk) => {
+    if (statusDiv) statusDiv.textContent = `Loading... ${Math.round(chunk.progress * 100)}%`;
+
+    let data = chunk.data;
+    // Decompress
     if (typeof pako !== 'undefined') {
         try {
-            // Check if it looks like GZIP (magic number 1f 8b) or just try
-            // Pako throws if invalid
-            data = pako.ungzip(new Uint8Array(buffer));
-            console.log('Decompressed board. Size:', data.length);
+            data = pako.ungzip(new Uint8Array(chunk.data));
         } catch (e) {
-            // console.log('Buffer incorrect or already raw', e);
-            data = new Uint8Array(buffer);
+            data = new Uint8Array(chunk.data);
         }
     } else {
-        data = new Uint8Array(buffer);
+        data = new Uint8Array(chunk.data);
     }
 
-    // Prepare ImageData
-    const imgData = bufferCtx.createImageData(boardSize, boardSize);
-    const d = imgData.data;
-
-    // Safety: ensure Loop doesn't exceed bounds
-    const len = Math.min(data.length / 3, boardSize * boardSize);
+    // chunk.height rows, boardSize width
+    // Buffer is R, G, B
+    const len = data.length / 3;
+    const clamped = new Uint8ClampedArray(len * 4);
 
     for (let i = 0; i < len; i++) {
-        d[i * 4] = data[i * 3];
-        d[i * 4 + 1] = data[i * 3 + 1];
-        d[i * 4 + 2] = data[i * 3 + 2];
-        d[i * 4 + 3] = 255;
+        clamped[i * 4] = data[i * 3];
+        clamped[i * 4 + 1] = data[i * 3 + 1];
+        clamped[i * 4 + 2] = data[i * 3 + 2];
+        clamped[i * 4 + 3] = 255;
     }
 
-    bufferCtx.putImageData(imgData, 0, 0);
+    const imgData = new ImageData(clamped, boardSize, chunk.height);
+    // Put at chunk.y
+    bufferCtx.putImageData(imgData, 0, chunk.y);
+
+    // Optimistic: Only redraw full canvas at 100%? Or every chunk?
+    // Every chunk is fun to watch loading.
     draw();
-    updateMinimap();
-    if (statusDiv) statusDiv.textContent = 'Online';
+
+    // Update minimap for this chunk (expensive? maybe just once at end?)
+    // Let's do it every 10%
+    if (chunk.progress * 100 % 10 < 2 || chunk.progress >= 0.99) {
+        updateMinimap();
+    }
+
+    if (chunk.progress >= 0.99) {
+        if (statusDiv) statusDiv.textContent = 'Online';
+        console.log('Board loading complete.');
+    }
 });
 
 socket.on('pixel', (data) => {
