@@ -11,8 +11,8 @@ const { createClient } = require('@supabase/supabase-js');
 
 const PORT = process.env.PORT || 3000;
 const BOARD_FILE = path.join(__dirname, 'board.dat');
-const BOARD_WIDTH = 6000;
-const BOARD_HEIGHT = 6000;
+const BOARD_WIDTH = 4500;
+const BOARD_HEIGHT = 4500;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
 
 // Supabase Setup
@@ -41,23 +41,45 @@ const initBoard = async () => {
 
     // Helper to migrate old board if needed
     const loadAndMigrate = (buffer) => {
-        if (buffer.length === BUFFER_SIZE) {
+        const len = buffer.length;
+
+        if (len === BUFFER_SIZE) {
             board = buffer;
             return true;
-        } else if (buffer.length === 3000 * 3000 * 3) {
-            console.log('Migrating 3000x3000 board to 6000x6000...');
-            // Copy row by row
+        }
+
+        // Migrate from 3000x3000 (Expand)
+        if (len === 3000 * 3000 * 3) {
+            console.log('Migrating 3000x3000 board to 4500x4500...');
             const oldWidth = 3000;
-            const newWidth = 6000;
+            const newWidth = 4500;
             for (let y = 0; y < 3000; y++) {
                 const sourceStart = y * oldWidth * 3;
                 const sourceEnd = sourceStart + (oldWidth * 3);
                 const targetStart = y * newWidth * 3;
                 buffer.copy(board, targetStart, sourceStart, sourceEnd);
             }
-            console.log('Migration complete.');
+            console.log('Migration complete (Expanded).');
             return true;
         }
+
+        // Migrate from 6000x6000 (Crop)
+        if (len === 6000 * 6000 * 3) {
+            console.log('Migrating 6000x6000 board to 4500x4500...');
+            const oldWidth = 6000;
+            const newWidth = 4500;
+            // We only take the top-left 4500x4500
+            for (let y = 0; y < 4500; y++) {
+                const sourceStart = y * oldWidth * 3;
+                // We copy 4500 pixels (width) * 3 bytes
+                const copyLen = newWidth * 3;
+                const targetStart = y * newWidth * 3;
+                buffer.copy(board, targetStart, sourceStart, sourceStart + copyLen);
+            }
+            console.log('Migration complete (Cropped).');
+            return true;
+        }
+
         return false;
     };
 
