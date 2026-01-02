@@ -852,15 +852,12 @@ socket.on('board_info', (info) => {
 socket.on('board_chunk', (chunk) => {
     if (statusDiv) statusDiv.textContent = `Loading... ${Math.round(chunk.progress * 100)}%`;
 
-    let data = chunk.data;
-    // Decompress
-    if (typeof pako !== 'undefined') {
-        try {
-            data = pako.ungzip(new Uint8Array(chunk.data));
-        } catch (e) {
-            data = new Uint8Array(chunk.data);
-        }
+    // Raw Data (Uint8Array or similar from ArrayBuffer)
+    let data;
+    if (chunk.data instanceof ArrayBuffer) {
+        data = new Uint8Array(chunk.data);
     } else {
+        // Maybe it's already a view or typed array?
         data = new Uint8Array(chunk.data);
     }
 
