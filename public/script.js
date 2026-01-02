@@ -467,8 +467,8 @@ function draw() {
 
     // Draw Grid
     if (scale > 15 || (typeof showGridOverride !== 'undefined' && showGridOverride)) {
-        const vx = -offsetX;
-        const vy = -offsetY;
+        const vx = offsetX;
+        const vy = offsetY;
         const vw = canvas.width / scale;
         const vh = canvas.height / scale;
         // Optimization: only draw grid in view

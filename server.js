@@ -74,7 +74,25 @@ async function syncScores() {
 }
 
 // Sync Cache every 5s
-setInterval(syncScores, 5000);
+// Real-time In-Memory Helper
+function updateGlobalLeaderboard(name, score, guestId) {
+    // Check if user is already in top 50 (larger buffer)
+    const existingIndex = globalLeaderboard.findIndex(p => p.guestId === guestId || p.name === name); // simplify matching
+
+    if (existingIndex !== -1) {
+        globalLeaderboard[existingIndex].score = score;
+        globalLeaderboard[existingIndex].name = name; // Update name if changed
+    } else {
+        globalLeaderboard.push({ name, score, guestId });
+    }
+
+    // Sort and Top 10
+    globalLeaderboard.sort((a, b) => b.score - a.score);
+    if (globalLeaderboard.length > 10) globalLeaderboard.length = 10;
+}
+
+// Sync Cache every 1s (Real-time requirement)
+setInterval(syncScores, 1000);
 
 // Load board logic
 const initBoard = async () => {
@@ -541,6 +559,10 @@ io.on('connection', async (socket) => {
                 broadcastLeaderboardLegacy();
             }
 
+            // Real-time Update
+            updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
+            io.emit('leaderboard', globalLeaderboard);
+
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
 
@@ -620,6 +642,10 @@ io.on('connection', async (socket) => {
             } else {
                 broadcastLeaderboardLegacy();
             }
+
+            // Real-time Update
+            updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
+            io.emit('leaderboard', globalLeaderboard);
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
