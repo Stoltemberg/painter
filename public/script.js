@@ -9,8 +9,50 @@ const minimapViewport = document.getElementById('minimap-viewport');
 const colorPicker = document.getElementById('colorPicker');
 const recentColorsDiv = document.getElementById('recentColors');
 const eraserBtn = document.getElementById('eraserBtn');
+const pipetteBtn = document.getElementById('pipetteBtn'); // New
 const exportBtn = document.getElementById('exportBtn');
 const soundBtn = document.getElementById('soundBtn');
+// ... other DOM elements ...
+
+// ... existing code ...
+
+// --- Button Listeners ---
+if (eraserBtn) {
+    eraserBtn.addEventListener('click', () => {
+        currentMode = 'eraser';
+        canvas.style.cursor = 'cell';
+        eraserBtn.style.border = '2px solid #4ade80';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+    });
+}
+
+if (pipetteBtn) {
+    pipetteBtn.addEventListener('click', () => {
+        currentMode = 'pipette';
+        canvas.style.cursor = 'copy';
+        pipetteBtn.style.border = '2px solid #4ade80';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+    });
+}
+
+function setColor(hex) {
+    colorPicker.value = hex;
+    currentMode = 'brush';
+    canvas.style.cursor = 'crosshair';
+    if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+    if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+    updateRecentColorsUI();
+}
+
+if (colorPicker) {
+    colorPicker.addEventListener('input', () => {
+        currentMode = 'brush';
+        canvas.style.cursor = 'crosshair';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+    });
+    // ...
+}
 const themeBtn = document.getElementById('themeBtn');
 const nicknameInput = document.getElementById('nicknameInput');
 const resetBtn = document.getElementById('resetView');
@@ -161,8 +203,15 @@ if (chatInput) {
 function addChatMessage(text, isMe = false, name = 'Anon') {
     const div = document.createElement('div');
     div.className = 'chat-msg';
-    div.textContent = `${name}: ${text}`;
-    if (isMe) div.style.background = 'rgba(74, 222, 128, 0.5)';
+
+    if (name === 'System') {
+        div.style.color = '#fbbf24'; // Warning Yellow
+        div.style.fontStyle = 'italic';
+        div.textContent = `${text}`;
+    } else {
+        div.textContent = `${name}: ${text}`;
+        if (isMe) div.style.background = 'rgba(74, 222, 128, 0.5)';
+    }
 
     // Auto-scroll
     const wasatBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 50;
@@ -391,6 +440,24 @@ canvas.addEventListener('mousedown', e => {
 
     // Prevent drawing if chat is focused
     if (document.activeElement === chatInput || document.activeElement === nicknameInput) return;
+
+    // PIPETTE LOGIC
+    if (currentMode === 'pipette' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
+            // Read pixel from buffer
+            const pixel = bufferCtx.getImageData(x, y, 1, 1).data;
+            const r = pixel[0];
+            const g = pixel[1];
+            const b = pixel[2];
+            // Convert to hex
+            const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+            setColor(hex);
+            addRecentColor(hex);
+            // Visual feedback?
+        }
+        return; // Don't paint
+    }
 
     if (e.button === 0) {
         isPainting = true;

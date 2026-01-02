@@ -128,6 +128,10 @@ setInterval(saveBoard, 10000);
 io.on('connection', (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
+
+    // System Join Message
+    socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
+
     socket.emit('init', board);
 
     socket.on('pixel', (data) => {
@@ -189,6 +193,8 @@ io.on('connection', (socket) => {
         io.emit('online_count', io.engine.clientsCount);
         // Tell others to remove this cursor
         socket.broadcast.emit('cursor_disconnect', socket.id);
+        // System Leave Message
+        socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'An artist has left the studio.', name: 'System' });
     });
 });
 
