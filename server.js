@@ -29,26 +29,15 @@ if (supabaseUrl && supabaseKey) {
 let board = Buffer.alloc(BUFFER_SIZE);
 board.fill(255); // White
 
+// Chat History
+const chatHistory = [];
+const MAX_HISTORY = 20;
+
 // Load board logic
 const initBoard = async () => {
-    // 1. Try local file first (fastest)
-    if (fs.existsSync(BOARD_FILE)) {
-        try {
-            console.log('Loading board from local file...');
-            const data = fs.readFileSync(BOARD_FILE);
-            if (data.length === BUFFER_SIZE) {
-                board = data;
-                console.log('Local board loaded.');
-                return;
-            } else {
-                console.log('Local board size mismatch, ignoring.');
-            }
-        } catch (err) {
-            console.error('Error loading local board:', err);
-        }
-    }
+    let loadedFromCloud = false;
 
-    // 2. If no local, try Supabase (if configured)
+    // 1. Try Supabase first (Source of Truth)
     if (supabase) {
         try {
             console.log('Checking Supabase for board.dat...');
@@ -58,10 +47,8 @@ const initBoard = async () => {
                 .download('board.dat');
 
             if (error) {
-                console.log('Supabase download error (might be first run):', error.message);
+                console.log('Supabase download error:', error.message);
             } else if (data) {
-                // data is a Blob or Buffer? In Node.js environment usually Blob or ArrayBuffer.
-                // supabase-js in Node returns a Blob by default or we need to await .arrayBuffer()
                 const arrayBuffer = await data.arrayBuffer();
                 const buffer = Buffer.from(arrayBuffer);
 
@@ -70,12 +57,29 @@ const initBoard = async () => {
                     console.log('Board loaded from Supabase!');
                     // Save locally to cache
                     fs.writeFileSync(BOARD_FILE, board);
+                    loadedFromCloud = true;
                 } else {
                     console.log('Supabase board size mismatch.');
                 }
             }
         } catch (err) {
             console.error('Error with Supabase init:', err);
+        }
+    }
+
+    // 2. If Supabase failed, try local file
+    if (!loadedFromCloud && fs.existsSync(BOARD_FILE)) {
+        try {
+            console.log('Loading board from local file (Fallback)...');
+            const data = fs.readFileSync(BOARD_FILE);
+            if (data.length === BUFFER_SIZE) {
+                board = data;
+                console.log('Local board loaded.');
+            } else {
+                console.log('Local board size mismatch, ignoring.');
+            }
+        } catch (err) {
+            console.error('Error loading local board:', err);
         }
     }
 };
@@ -129,6 +133,9 @@ io.on('connection', (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
 
+    // Send Chat History
+    socket.emit('chat_history', chatHistory);
+
     // System Join Message
     socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
 
@@ -180,12 +187,33 @@ io.on('connection', (socket) => {
 
     socket.on('chat', (msg) => {
         if (msg && msg.text) {
-            // msg: { text, name }
-            io.emit('chat', {
+            const text = msg.text.substring(0, 100);
+
+            // ADMIN TOOLS (Secret Command)
+            if (text.startsWith('/clear admin123')) {
+                console.log('Admin Clear Command Executed');
+                board.fill(255);
+                needsSave = true;
+                io.emit('init', board); // Reload everyone
+
+                const sysMsg = { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' };
+                chatHistory.push(sysMsg);
+                if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
+                io.emit('chat', sysMsg);
+                return;
+            }
+
+            const chatMsg = {
                 id: socket.id,
-                text: msg.text.substring(0, 100),
+                text: text,
                 name: msg.name ? msg.name.substring(0, 20) : null
-            });
+            };
+
+            // Add to history
+            chatHistory.push(chatMsg);
+            if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
+
+            io.emit('chat', chatMsg);
         }
     });
 

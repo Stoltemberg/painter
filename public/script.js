@@ -664,6 +664,52 @@ socket.on('online_count', (count) => {
     if (onlineCountDiv) onlineCountDiv.textContent = `● ${count} Online`;
 });
 
+// --- Minimap Navigation ---
+minimapCanvas.addEventListener('mousedown', e => {
+    // Only navigate if left click
+    if (e.button !== 0) return;
+
+    const rect = minimapCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const minimapW = minimapCanvas.width;
+    const minimapH = minimapCanvas.height;
+
+    // Convert to Percentage
+    const px = mx / minimapW;
+    const py = my / minimapH;
+
+    // Convert to World
+    const wx = px * boardSize;
+    const wy = py * boardSize;
+
+    // Center view
+    offsetX = wx - (canvas.width / 2) / scale;
+    offsetY = wy - (canvas.height / 2) / scale;
+
+    draw();
+    updateMinimapViewport();
+});
+
+// --- Mouse Events ---
+// ...
+
 socket.on('chat', (msg) => {
     addChatMessage(msg.text, msg.id === socket.id, msg.name);
+});
+
+socket.on('chat_history', (history) => {
+    chatMessages.innerHTML = '';
+    history.forEach(msg => {
+        addChatMessage(msg.text, msg.id === socket.id, msg.name);
+    });
+    // System msg indicating history loaded?
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.style.color = '#aaa';
+    div.style.fontSize = '0.8rem';
+    div.style.textAlign = 'center';
+    div.textContent = '--- Chat History Loaded ---';
+    chatMessages.appendChild(div);
 });
