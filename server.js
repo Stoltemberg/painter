@@ -123,6 +123,24 @@ app.post('/api/admin/save', basicAuth, async (req, res) => {
     res.json({ success: true, message: 'Save triggered successfully.' });
 });
 
+// Zones Persistence
+const ZONES_FILE = path.join(__dirname, 'zones.json');
+let protectedZones = [];
+if (fs.existsSync(ZONES_FILE)) {
+    try {
+        protectedZones = JSON.parse(fs.readFileSync(ZONES_FILE));
+        console.log(`Loaded ${protectedZones.length} protected zones.`);
+    } catch (e) {
+        console.error('Error loading zones:', e);
+    }
+}
+
+function saveZones() {
+    fs.writeFileSync(ZONES_FILE, JSON.stringify(protectedZones, null, 2));
+}
+
+// ...
+
 app.post('/api/admin/clear', basicAuth, (req, res) => {
     console.log('Admin triggered clear board.');
     board.fill(255);
@@ -203,9 +221,19 @@ io.on('connection', (socket) => {
 
     socket.emit('init', board);
 
-    // V5: Leaderboard Tracking
+    // V5: Leaderboard Tracking & Protected Zones
     socket.on('pixel', (data) => {
         const { x, y, r, g, b, size = 1 } = data; // Default size 1
+
+        // Check Protection
+        for (const zone of protectedZones) {
+            // Check if center of brush is inside zone
+            // Improvement: Check if ANY part of brush is inside? 
+            // For now, center check is fast and sufficient for 1px brush.
+            if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
+                return; // Protected
+            }
+        }
 
         // Calculate bounds for the brush (centered at x, y)
         const half = Math.floor(size / 2);
