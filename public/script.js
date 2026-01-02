@@ -50,6 +50,7 @@ if (colorPicker) {
         canvas.style.cursor = 'crosshair';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
     });
     // ...
 }
