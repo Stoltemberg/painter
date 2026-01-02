@@ -460,6 +460,24 @@ canvas.addEventListener('mousedown', e => {
         return; // Don't paint
     }
 
+    // FILL LOGIC
+    if (currentMode === 'fill' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
+            const hex = colorPicker.value;
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+
+            // Visual feedback - maybe play a sound?
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            // playPop(); 
+
+            socket.emit('fill', { x, y, r, g, b });
+        }
+        return;
+    }
+
     if (e.button === 0) {
         isPainting = true;
         paint(e.clientX, e.clientY);
