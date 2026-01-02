@@ -201,6 +201,7 @@ let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
 let soundEnabled = true;
 let myNickname = localStorage.getItem('painter_nickname') || 'Guest';
 let showGridOverride = false;
+let hoverPos = null;
 
 // UI Setup
 if (nicknameInput) {
@@ -432,13 +433,35 @@ function draw() {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bufferCanvas, 0, 0);
 
+    // Draw Grid
     if (scale > 15 || (typeof showGridOverride !== 'undefined' && showGridOverride)) {
-        const vx = Math.max(0, offsetX);
-        const vy = Math.max(0, offsetY);
+        const vx = -offsetX;
+        const vy = -offsetY;
         const vw = canvas.width / scale;
         const vh = canvas.height / scale;
+        // Optimization: only draw grid in view
         drawGrid(ctx, vx, vy, vw, vh);
     }
+
+    // Ghost Cursor
+    if ((currentMode === 'brush' || currentMode === 'eraser') && hoverPos && !isDragging) {
+        ctx.fillStyle = currentMode === 'eraser' ? 'rgba(255,255,255,0.5)' : colorPicker.value + '80'; // 50% opacity
+        if (currentMode !== 'eraser') {
+            // Hex + Alpha. colorPicker.value is #RRGGBB. '80' is 128/255 alpha.
+            // If built-in color picker doesn't support alpha, manually parse or use simpler css color.
+            // Simplified:
+            const hex = colorPicker.value;
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
+        }
+        ctx.fillRect(Math.floor(hoverPos.x), Math.floor(hoverPos.y), 1, 1);
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 0.1;
+        ctx.strokeRect(Math.floor(hoverPos.x), Math.floor(hoverPos.y), 1, 1);
+    }
+
     ctx.restore();
 
     updateCursors();
@@ -557,31 +580,45 @@ canvas.addEventListener('touchmove', e => {
             e.touches[0].clientY - e.touches[1].clientY
         );
 
-        // Pan
+        // Calculate Pan delta
         const dx = cx - lastX;
         const dy = cy - lastY;
+
+        // Apply Pan
         offsetX -= dx / scale;
         offsetY -= dy / scale;
-        lastX = cx;
-        lastY = cy;
 
-        // Zoom
+        // Apply Zoom
         if (touchStartDist > 0) {
             const newScale = touchStartScale * (dist / touchStartDist);
+
             // Limit zoom
             if (newScale > 0.05 && newScale < 50) {
-                // To zoom around center (simplified)
+                // Zoom towards center of pinch (cx, cy)
+                // Math: worldPoint = screen / scale + offset
+                // We want worldPoint to stay at screenPoint
+
+                // 1. Get world point before zoom
+                // Note: offsetX/Y were just updated for pan. 
+                // To zoom accurately around pinch center is tricky combined with pan.
+                // Simple approach: Apply zoom relative to center of screen or keep simple.
+                // Better approach: 
                 const rect = canvas.getBoundingClientRect();
                 const mx = cx - rect.left;
                 const my = cy - rect.top;
+
                 const wx = mx / scale + offsetX;
                 const wy = my / scale + offsetY;
 
                 scale = newScale;
+
                 offsetX = wx - mx / scale;
                 offsetY = wy - my / scale;
             }
         }
+
+        lastX = cx;
+        lastY = cy;
 
         draw();
         updateMinimapViewport();
@@ -730,6 +767,11 @@ canvas.addEventListener('mousemove', e => {
         socket.emit('cursor', { x: x + 0.5, y: y + 0.5, name: myNickname });
         lastCursorEmit = now;
     }
+
+    // Ghost Cursor Update
+    hoverPos = { x, y };
+    if (!isDragging && !isPainting) draw(); // Redraw for ghost cursor
+
 
     if (isPainting && currentMode === 'brush') {
         paint(e.clientX, e.clientY);
