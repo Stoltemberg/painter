@@ -1,4 +1,13 @@
-const socket = io();
+// Guest Persistence
+let guestUUID = localStorage.getItem('guestUUID');
+if (!guestUUID) {
+    guestUUID = crypto.randomUUID();
+    localStorage.setItem('guestUUID', guestUUID);
+}
+
+const socket = io({
+    query: { guestId: guestUUID }
+});
 
 // DOM Elements
 const canvas = document.getElementById('board');
@@ -720,19 +729,50 @@ socket.on('disconnect', () => {
     }
 });
 
+let refillInterval;
+let refillRate = 15000; // Default guest rate
+
 // V7: Ink Update
 socket.on('ink', (data) => {
     ink = data.ink;
     maxInk = data.max;
-    if (inkValue) inkValue.textContent = ink;
+    refillRate = data.rate || 15000;
+
+    updateInkUI();
+    startRefillSimulation();
+});
+
+function updateInkUI() {
+    if (inkValue) inkValue.textContent = Math.floor(ink);
     if (inkFill) {
         const pct = Math.min(100, (ink / maxInk) * 100);
         inkFill.style.width = `${pct}%`;
-        // Change color if low
         if (pct < 10) inkFill.style.background = '#f87171';
         else inkFill.style.background = '#3b82f6';
     }
-});
+}
+
+function startRefillSimulation() {
+    if (refillInterval) clearInterval(refillInterval);
+
+    // Add 1 pixel every 'refillRate' milliseconds
+    // To make it smooth, maybe update progress bar more often?
+    // For now, let's just tick up the number/bar every second loosely?
+    // Or actually wait the full duration. 
+    // Let's do a smooth generic bar animation via CSS, but the number needs to tick.
+    // Simple approach: Tick every 1s, add fraction.
+
+    const tickRate = 1000;
+    const inkPerTick = tickRate / refillRate;
+
+    refillInterval = setInterval(() => {
+        if (ink < maxInk) {
+            ink += inkPerTick;
+            if (ink > maxInk) ink = maxInk;
+            updateInkUI();
+        }
+    }, tickRate);
+}
 
 socket.on('error_msg', (msg) => {
     // Show toast or alert
