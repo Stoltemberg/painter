@@ -584,6 +584,14 @@ function paint(clientX, clientY) {
     // Frontend Rate Limit (matching backend roughly)
     if (now - lastPaintEmit < 15) return;
 
+    // Check Ink
+    if (ink <= 0) {
+        // Visual feedback? Shake UI?
+        if (inkValue) inkValue.style.color = 'red';
+        setTimeout(() => { if (inkValue) inkValue.style.color = ''; }, 200);
+        return;
+    }
+
     const { x, y } = screenToWorld(clientX, clientY);
     if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
         let r, g, b;
@@ -601,6 +609,11 @@ function paint(clientX, clientY) {
         playPop(); // Local sound
         socket.emit('pixel', { x, y, r, g, b, size: 1 });
         lastPaintEmit = now;
+
+        // Optimistic update
+        ink--;
+        if (inkValue) inkValue.textContent = ink;
+        if (inkFill) inkFill.style.width = `${Math.min(100, (ink / maxInk) * 100)}%`;
     }
 }
 
@@ -616,7 +629,70 @@ function drawPixel(x, y, r, g, b) {
 }
 
 // --- Socket ---
-// --- Socket ---
+// Initialize Supabase & Auth
+let supabase = null;
+const loginBtn = document.getElementById('loginBtn');
+const inkValue = document.getElementById('inkValue');
+const inkFill = document.getElementById('inkFill');
+let ink = 0;
+let maxInk = 250;
+
+async function initSupabase() {
+    try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        if (config.supabaseUrl && config.supabaseKey) {
+            supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
+            console.log('Supabase Client Initialized');
+
+            // Check Session
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+                handleUser(data.session.user);
+            }
+
+            // Auth Listener
+            supabase.auth.onAuthStateChange((event, session) => {
+                if (session) handleUser(session.user);
+            });
+        }
+    } catch (e) {
+        console.error('Failed to init Supabase:', e);
+    }
+}
+initSupabase();
+
+function handleUser(user) {
+    if (!loginBtn) return;
+    loginBtn.textContent = 'Log Out';
+    loginBtn.onclick = async () => {
+        await supabase.auth.signOut();
+        window.location.reload();
+    };
+
+    // Send token to server to upgrade socket
+    if (supabase) {
+        supabase.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                socket.emit('auth', data.session.access_token);
+            }
+        });
+    }
+}
+
+if (loginBtn) {
+    loginBtn.addEventListener('click', async () => {
+        if (loginBtn.textContent === 'Log Out') return;
+
+        const email = prompt('Enter your email to log in (Magic Link):');
+        if (email && supabase) {
+            const { error } = await supabase.auth.signInWithOtp({ email });
+            if (error) alert('Error: ' + error.message);
+            else alert('Check your email for the login link!');
+        }
+    });
+}
+
 socket.on('connect', () => {
     if (statusDiv) {
         statusDiv.textContent = 'Connected';
@@ -629,6 +705,30 @@ socket.on('disconnect', () => {
         statusDiv.textContent = 'Reconnecting...';
         statusDiv.style.color = '#f87171';
     }
+});
+
+// V7: Ink Update
+socket.on('ink', (data) => {
+    ink = data.ink;
+    maxInk = data.max;
+    if (inkValue) inkValue.textContent = ink;
+    if (inkFill) {
+        const pct = Math.min(100, (ink / maxInk) * 100);
+        inkFill.style.width = `${pct}%`;
+        // Change color if low
+        if (pct < 10) inkFill.style.background = '#f87171';
+        else inkFill.style.background = '#3b82f6';
+    }
+});
+
+socket.on('error_msg', (msg) => {
+    // Show toast or alert
+    alert(msg);
+});
+
+socket.on('auth_success', (data) => {
+    console.log('Authenticated as:', data.name);
+    // Maybe show name in UI?
 });
 
 socket.on('init', (buffer) => {

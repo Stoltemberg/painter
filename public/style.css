@@ -122,43 +122,149 @@ html {
     left: 20px;
     display: flex;
     gap: 12px;
+    align-items: center;
     pointer-events: none;
-    /* Container doesn't block, children do */
+    flex-wrap: wrap;
+    /* Prevent overflow on small screens */
 }
 
-.coords,
-.online-count,
-#nicknameInput {
+.glass-group {
     background: var(--glass-bg);
     backdrop-filter: blur(var(--backdrop-blur));
     -webkit-backdrop-filter: blur(var(--backdrop-blur));
     border: 1px solid var(--glass-border);
-    padding: 10px 16px;
-    border-radius: 16px;
-    font-size: 0.9rem;
-    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     pointer-events: auto;
     box-shadow: var(--shadow-soft);
-    transition: all 0.3s ease;
+    height: 40px;
+    /* Consistent height */
+    box-sizing: border-box;
+}
+
+.divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.coords,
+.online-count {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background: none;
+    /* Remove individual backgrounds */
+    border: none;
+    padding: 0;
+    box-shadow: none;
 }
 
 .online-count {
     color: var(--accent);
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    white-space: nowrap;
 }
 
 #nicknameInput {
-    color: var(--text-color);
-    width: 120px;
-    text-align: center;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 0.9rem;
+    width: 80px;
     outline: none;
+    padding: 0;
+    text-align: left;
+    font-family: inherit;
+    font-weight: 500;
 }
 
 #nicknameInput:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+    border-bottom: 1px solid var(--accent);
+    box-shadow: none;
+    background: transparent;
+}
+
+#nicknameInput::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Ink Widget */
+.ink-widget {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ink-icon {
+    font-size: 0.9rem;
+}
+
+.ink-bar-compact {
+    width: 50px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ink-fill {
+    height: 100%;
+    background: #3b82f6;
+    transition: width 0.3s;
+}
+
+.ink-text {
+    font-size: 0.8rem;
+    color: #3b82f6;
+    font-weight: bold;
+    min-width: 25px;
+    text-align: right;
+}
+
+.login-compact-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.2s;
+    height: 28px;
+    display: flex;
+    align-items: center;
+}
+
+.login-compact-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Old Ink Removed */
+
+.login-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    pointer-events: auto;
+    font-family: inherit;
+    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 222, 128, 0.4);
 }
 
 /* Palette */
@@ -276,34 +382,12 @@ html {
 /* Instructions */
 .instructions {
     position: absolute;
-    top: 60px;
-    /* Moved down to avoid overlap */
-    left: 10px;
-    color: rgba(255, 255, 255, 0.5);
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 0.8rem;
+    top: 70px;
+    left: 20px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.75rem;
     pointer-events: none;
-    backdrop-filter: blur(2px);
-}
-
-#nicknameInput {
-    width: 100px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid var(--border-color);
-    color: white;
-    border-radius: 20px;
-    padding: 5px 10px;
-    font-size: 0.85rem;
-    outline: none;
-    pointer-events: auto;
-    transition: all 0.2s;
-}
-
-#nicknameInput:focus {
-    background: rgba(0, 0, 0, 0.9);
-    border-color: var(--accent);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 /* Cursors */
