@@ -11,8 +11,8 @@ const { createClient } = require('@supabase/supabase-js');
 
 const PORT = process.env.PORT || 3000;
 const BOARD_FILE = path.join(__dirname, 'board.dat');
-const BOARD_WIDTH = 4500;
-const BOARD_HEIGHT = 4500;
+const BOARD_WIDTH = 3000;
+const BOARD_HEIGHT = 3000;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
 
 // Supabase Setup
