@@ -123,12 +123,17 @@ body {
 }
 
 .glass-group:hover,
-.palette:hover,
 .leaderboard:hover,
 .minimap-container:hover {
     border-color: var(--glass-highlight);
     box-shadow: var(--shadow-lg);
     transform: translateY(-2px);
+}
+
+.palette:hover {
+    border-color: var(--glass-highlight);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-50%) translateY(-2px);
 }
 
 /* --- TOP BAR --- */
