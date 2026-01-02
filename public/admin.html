@@ -99,6 +99,16 @@
             color: white;
         }
 
+        .input-dark {
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            padding: 5px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
         #log {
             font-family: monospace;
             font-size: 0.8rem;
@@ -134,6 +144,26 @@
             <div style="display: flex; flex-direction: column; gap: 10px;">
                 <button onclick="triggerSave()">💾 Force Save to Cloud</button>
                 <button class="danger" onclick="clearBoard()">☢️ CLEAR ENTIRE BOARD</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🛡️ Protected Zones</h2>
+            <p style="font-size: 0.8rem; color: #888;">Drag on canvas to define a zone.</p>
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <canvas id="adminCanvas" width="300" height="300"
+                    style="border: 1px solid #555; background: #000; cursor: crosshair;"></canvas>
+                <div style="flex: 1;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px;">
+                        <input type="number" id="zX" placeholder="X" readonly class="input-dark">
+                        <input type="number" id="zY" placeholder="Y" readonly class="input-dark">
+                        <input type="number" id="zW" placeholder="W" readonly class="input-dark">
+                        <input type="number" id="zH" placeholder="H" readonly class="input-dark">
+                    </div>
+                    <button onclick="addZone()">➕ Protect Selection</button>
+                    <hr style="border-color: #333; margin: 15px 0;">
+                    <div id="zoneList" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
             </div>
         </div>
 
@@ -189,8 +219,158 @@
             return `${h}h ${m}m`;
         }
 
+        // Logic
+        const canvas = document.getElementById('adminCanvas');
+        const ctx = canvas.getContext('2d');
+        const BOARD_SIZE = 3000;
+        let scale = 0.1;
+
+        // Load Board
+        async function loadBoard() {
+            try {
+                const res = await fetch('/api/admin/board');
+                const buffer = await res.arrayBuffer();
+                const data = new Uint8Array(buffer);
+
+                // Create ImageData
+                const imgData = new ImageData(BOARD_SIZE, BOARD_SIZE);
+                // Copy buffer to ImageData (RGB -> RGBA)
+                // Buffer is R,G,B. ImageData is R,G,B,A
+                for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+                    imgData.data[i * 4] = data[i * 3];
+                    imgData.data[i * 4 + 1] = data[i * 3 + 1];
+                    imgData.data[i * 4 + 2] = data[i * 3 + 2];
+                    imgData.data[i * 4 + 3] = 255;
+                }
+
+                // Draw to temp canvas to scale down efficiently
+                const temp = document.createElement('canvas');
+                temp.width = BOARD_SIZE;
+                temp.height = BOARD_SIZE;
+                temp.getContext('2d').putImageData(imgData, 0, 0);
+
+                // Draw to main canvas
+                scale = 300 / BOARD_SIZE; // 0.1
+                ctx.drawImage(temp, 0, 0, 300, 300);
+
+                log('Board loaded.');
+                loadZones();
+            } catch (e) {
+                log('Error loading board: ' + e.message);
+            }
+        }
+
+        // Zone Interaction
+        let startX = 0, startY = 0, isDragging = false;
+        let selection = null;
+
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            startX = (e.clientX - rect.left) / scale;
+            startY = (e.clientY - rect.top) / scale;
+            isDragging = true;
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            const currX = (e.clientX - rect.left) / scale;
+            const currY = (e.clientY - rect.top) / scale;
+
+            const w = Math.abs(currX - startX);
+            const h = Math.abs(currY - startY);
+            const x = Math.min(currX, startX);
+            const y = Math.min(currY, startY);
+
+            selection = { x: Math.floor(x), y: Math.floor(y), w: Math.floor(w), h: Math.floor(h) };
+
+            // Update Inputs
+            document.getElementById('zX').value = selection.x;
+            document.getElementById('zY').value = selection.y;
+            document.getElementById('zW').value = selection.w;
+            document.getElementById('zH').value = selection.h;
+
+            // Redraw (Simplified: Just overlay rect, no full redraw)
+            // But we need to keep the board... we should save board state
+            // For now, let's just draw rect on top and reload board occasionally?
+            // Better: use an overlay div? No, canvas is fine.
+            // Ideally we redraw the board image but it's heavy to upscale each frame?
+            // No, we drew it once. Wait, ctx.drawImage(temp) is fast if temp is kept.
+            // Let's keep `tempCanvas` global?
+
+            // For now, just Outline
+            // We can't clearRect because board is there. 
+            // Let's just draw transparent rect. IT will stack up.
+            // Fix: reload board from server? No too slow.
+            // Fix: Just use CSS overlay for selection?
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Load Zones
+        async function loadZones() {
+            const res = await fetch('/api/admin/zones');
+            const zones = await res.json();
+            const list = document.getElementById('zoneList');
+            list.innerHTML = '';
+
+            // Draw zones on canvas
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+
+            zones.forEach(z => {
+                const el = document.createElement('div');
+                el.style.background = '#333';
+                el.style.padding = '5px';
+                el.style.marginBottom = '5px';
+                el.style.display = 'flex';
+                el.style.justifyContent = 'space-between';
+                el.style.alignItems = 'center';
+                el.innerHTML = `
+                    <span>#${z.id.slice(-4)}: (${z.x},${z.y}) ${z.w}x${z.h}</span>
+                    <button style="width:auto; padding: 2px 8px; font-size: 0.8rem;" class="danger" onclick="deleteZone('${z.id}')">X</button>
+                `;
+                list.appendChild(el);
+
+                // Draw valid zones
+                ctx.strokeRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
+            });
+
+            // Draw current selection if exists
+            if (selection) {
+                ctx.strokeStyle = '#4ade80';
+                ctx.strokeRect(selection.x * scale, selection.y * scale, selection.w * scale, selection.h * scale);
+            }
+        }
+
+        async function addZone() {
+            if (!selection) return alert('Select an area first!');
+            try {
+                const res = await fetch('/api/admin/zones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(selection)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    log('Zone added.');
+                    selection = null;
+                    loadZones(); // Refresh
+                }
+            } catch (e) { log('Error: ' + e); }
+        }
+
+        async function deleteZone(id) {
+            if (!confirm('Deletion?')) return;
+            await fetch('/api/admin/zones/' + id, { method: 'DELETE' });
+            loadZones();
+        }
+
         // Init
         fetchStats();
+        loadBoard();
         setInterval(fetchStats, 5000);
     </script>
 </body>

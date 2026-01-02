@@ -19,34 +19,64 @@ const colorPicker = document.getElementById('colorPicker');
 const recentColorsDiv = document.getElementById('recentColors');
 const brushBtn = document.getElementById('brushBtn');
 const eraserBtn = document.getElementById('eraserBtn');
-const pipetteBtn = document.getElementById('pipetteBtn');
-const stampBtn = document.getElementById('stampBtn'); // New
+const pipetteBtn = document.getElementById('pipetteBtn'); // V3
+const stampBtn = document.getElementById('stampBtn'); // V6
+const stampOptions = document.getElementById('stampOptions'); // V6
+const stampOpts = document.querySelectorAll('.stamp-opt'); // V6
 const exportBtn = document.getElementById('exportBtn');
 const soundBtn = document.getElementById('soundBtn');
 // ... other DOM elements ...
 
+// Stamp Shapes (Relative Coordinates)
+const STAMPS = {
+    heart: [
+        { x: 0, y: 0 }, { x: -1, y: -1 }, { x: 1, y: -1 }, { x: -2, y: -2 }, { x: 2, y: -2 },
+        { x: -3, y: -1 }, { x: 3, y: -1 }, { x: -2, y: 1 }, { x: 2, y: 1 }, { x: -1, y: 2 }, { x: 1, y: 2 }, { x: 0, y: 3 }
+    ],
+    star: [
+        { x: 0, y: -3 }, { x: 0, y: -2 },
+        { x: -1, y: -1 }, { x: 1, y: -1 },
+        { x: -2, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 },
+        { x: -1, y: 1 }, { x: 1, y: 1 },
+        { x: -2, y: 2 }, { x: 2, y: 2 }
+    ],
+    smiley: [
+        { x: -2, y: -2 }, { x: 2, y: -2 }, // Eyes
+        { x: -2, y: 1 }, { x: -1, y: 2 }, { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 1 } // Mouth
+    ],
+    checker: [
+        { x: -1, y: -1 }, { x: 1, y: -1 },
+        { x: 0, y: 0 },
+        { x: -1, y: 1 }, { x: 1, y: 1 }
+    ]
+};
+let currentStamp = 'heart';
+
 // ... existing code ...
 
 // --- Button Listeners ---
+// Tool Selectors
 if (brushBtn) {
     brushBtn.addEventListener('click', () => {
         currentMode = 'brush';
-        canvas.style.cursor = 'crosshair';
         brushBtn.style.border = '2px solid #4ade80';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
         if (stampBtn) stampBtn.style.border = '1px solid #555';
+        if (stampOptions) stampOptions.classList.add('hidden');
+        canvas.style.cursor = 'crosshair';
     });
 }
 
 if (eraserBtn) {
     eraserBtn.addEventListener('click', () => {
         currentMode = 'eraser';
-        canvas.style.cursor = 'cell';
         eraserBtn.style.border = '2px solid #4ade80';
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
         if (stampBtn) stampBtn.style.border = '1px solid #555';
+        if (stampOptions) stampOptions.classList.add('hidden');
+        canvas.style.cursor = 'cell';
     });
 }
 
@@ -233,6 +263,11 @@ if (chatInput) {
                 e.preventDefault();
                 chatInput.focus();
             }
+
+            isDrawing = true;
+            // Open chat logic
+            e.preventDefault();
+            chatInput.focus();
         }
 
         // Escape to cancel/close
@@ -487,20 +522,45 @@ canvas.addEventListener('mousedown', e => {
     if (currentMode === 'pipette' && e.button === 0) {
         const { x, y } = screenToWorld(e.clientX, e.clientY);
         if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
-            // Read pixel from buffer
             const pixel = bufferCtx.getImageData(x, y, 1, 1).data;
-            const r = pixel[0];
-            const g = pixel[1];
-            const b = pixel[2];
-            // Convert to hex
-            const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+            const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
             setColor(hex);
             addRecentColor(hex);
-            // Visual feedback?
+            // Quick visual feedback
+            if (pipetteBtn) pipetteBtn.style.background = hex;
+            setTimeout(() => { if (pipetteBtn) pipetteBtn.style.background = ''; }, 300);
         }
-        return; // Don't paint
+        return;
     }
 
+    // STAMP LOGIC (V6)
+    if (currentMode === 'stamp' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        const shape = STAMPS[currentStamp] || STAMPS['heart'];
+
+        // Get current color
+        const hex = colorPicker.value;
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+
+        const pixels = [];
+        shape.forEach(pt => {
+            const px = x + pt.x;
+            const py = y + pt.y;
+            if (px >= 0 && px < boardSize && py >= 0 && py < boardSize) {
+                pixels.push({ x: px, y: py, r, g, b });
+                drawPixel(px, py, r, g, b); // Optimistic
+            }
+        });
+
+        if (pixels.length > 0) {
+            ink -= pixels.length;
+            if (inkValue) inkValue.textContent = Math.floor(ink);
+            socket.emit('batch_pixels', pixels);
+        }
+        return;
+    }
 
     if (e.button === 0) {
         isPainting = true;
@@ -595,7 +655,6 @@ function paint(clientX, clientY) {
 
     // Check Ink
     if (ink <= 0) {
-        // Visual feedback? Shake UI?
         if (inkValue) inkValue.style.color = 'red';
         setTimeout(() => { if (inkValue) inkValue.style.color = ''; }, 200);
         return;
@@ -1051,4 +1110,62 @@ if (coordsDiv) {
             }, 1000);
         });
     });
+}
+
+// V6: Cursor Reactions
+document.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const keyMap = {
+        '1': '❤️',
+        '2': '😂',
+        '3': '😎',
+        '4': '🔥'
+    };
+
+    if (keyMap[e.key]) {
+        const emoji = keyMap[e.key];
+        // Ensure lastWorldPos is defined (track it in mousemove if not already)
+        // If undefined, maybe use center of screen or previous logic
+        if (typeof lastWorldPos === 'undefined') return;
+
+        socket.emit('reaction', {
+            emoji: emoji,
+            x: lastWorldPos.x,
+            y: lastWorldPos.y
+        });
+        showReaction({ x: lastWorldPos.x, y: lastWorldPos.y, emoji, id: 'me' });
+    }
+});
+
+// Helper for reactions
+function showReaction(data) {
+    const { x, y, emoji, id } = data;
+    const div = document.createElement('div');
+    div.textContent = emoji;
+    div.style.position = 'absolute';
+    div.style.left = '0';
+    div.style.top = '0';
+    div.style.fontSize = '24px';
+    div.style.pointerEvents = 'none';
+    div.style.zIndex = '1000';
+
+    // Transform world to screen
+    const screenX = (x * scale) + offsetX;
+    const screenY = (y * scale) + offsetY;
+    div.style.transform = `translate(${screenX}px, ${screenY}px)`;
+    div.style.transition = 'transform 1s ease-out, opacity 1s ease-out';
+
+    document.body.appendChild(div);
+
+    // Animate
+    requestAnimationFrame(() => {
+        div.style.transform = `translate(${screenX}px, ${screenY - 50}px)`; // Float up
+        div.style.opacity = '0';
+    });
+
+    setTimeout(() => {
+        div.remove();
+    }, 1000);
 }

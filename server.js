@@ -144,11 +144,36 @@ if (fs.existsSync(ZONES_FILE)) {
     }
 }
 
-function saveZones() {
+const saveZones = () => {
     fs.writeFileSync(ZONES_FILE, JSON.stringify(protectedZones, null, 2));
-}
+};
 
-// ...
+app.get('/api/admin/zones', basicAuth, (req, res) => {
+    res.json(protectedZones);
+});
+
+app.post('/api/admin/zones', basicAuth, express.json(), (req, res) => {
+    const { x, y, w, h, reason } = req.body;
+    if (x == null || y == null || w == null || h == null) return res.status(400).send('Missing args');
+    const newZone = { id: Date.now().toString(), x, y, w, h, reason: reason || 'Admin' };
+    protectedZones.push(newZone);
+    saveZones();
+    console.log('Added zone:', newZone);
+    res.json({ success: true, zone: newZone });
+});
+
+app.delete('/api/admin/zones/:id', basicAuth, (req, res) => {
+    const { id } = req.params;
+    protectedZones = protectedZones.filter(z => z.id !== id);
+    saveZones();
+    res.json({ success: true });
+});
+
+app.get('/api/admin/board', basicAuth, (req, res) => {
+    // Send the buffer directly
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.send(Buffer.from(board));
+});
 
 app.post('/api/admin/clear', basicAuth, (req, res) => {
     console.log('Admin triggered clear board.');

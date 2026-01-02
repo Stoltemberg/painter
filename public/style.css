@@ -560,3 +560,45 @@ html {
     color: var(--text-color);
     box-shadow: var(--shadow-soft);
 }
+
+/* Stamp Options Panel */
+.stamp-options {
+    position: absolute;
+    bottom: 80px;
+    /* Above toolbar */
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    padding: 8px;
+    border-radius: 12px;
+    display: flex;
+    gap: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 200;
+}
+
+.stamp-options.hidden {
+    display: none;
+}
+
+.stamp-opt {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: all 0.2s;
+}
+
+.stamp-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.stamp-opt.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
