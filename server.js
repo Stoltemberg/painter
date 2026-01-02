@@ -330,9 +330,25 @@ function updateInk(socket) {
     return state;
 }
 
+const zlib = require('zlib');
+
+// Helper: Compress board for initial load
+const getCompressedBoard = () => {
+    return zlib.gzipSync(board);
+};
+
 io.on('connection', (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
+
+    // Send Compressed Board
+    try {
+        const compressed = getCompressedBoard();
+        socket.emit('init', compressed);
+    } catch (e) {
+        console.error('Compression error:', e);
+        socket.emit('init', board); // Fallback
+    }
 
     // Send Chat History
     socket.emit('chat_history', chatHistory);
