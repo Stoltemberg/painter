@@ -11,7 +11,7 @@ const socket = io({
 
 // DOM Elements
 const canvas = document.getElementById('board');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for opaque
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 const minimapViewport = document.getElementById('minimap-viewport');

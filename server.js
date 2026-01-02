@@ -9,8 +9,8 @@ const { createClient } = require('@supabase/supabase-js');
 
 const PORT = process.env.PORT || 3000;
 const BOARD_FILE = path.join(__dirname, 'board.dat');
-const BOARD_WIDTH = 3000;
-const BOARD_HEIGHT = 3000;
+const BOARD_WIDTH = 6000;
+const BOARD_HEIGHT = 6000;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
 
 // Supabase Setup
@@ -37,6 +37,28 @@ const MAX_HISTORY = 20;
 const initBoard = async () => {
     let loadedFromCloud = false;
 
+    // Helper to migrate old board if needed
+    const loadAndMigrate = (buffer) => {
+        if (buffer.length === BUFFER_SIZE) {
+            board = buffer;
+            return true;
+        } else if (buffer.length === 3000 * 3000 * 3) {
+            console.log('Migrating 3000x3000 board to 6000x6000...');
+            // Copy row by row
+            const oldWidth = 3000;
+            const newWidth = 6000;
+            for (let y = 0; y < 3000; y++) {
+                const sourceStart = y * oldWidth * 3;
+                const sourceEnd = sourceStart + (oldWidth * 3);
+                const targetStart = y * newWidth * 3;
+                buffer.copy(board, targetStart, sourceStart, sourceEnd);
+            }
+            console.log('Migration complete.');
+            return true;
+        }
+        return false;
+    };
+
     // 1. Try Supabase first (Source of Truth)
     if (supabase) {
         try {
@@ -52,14 +74,13 @@ const initBoard = async () => {
                 const arrayBuffer = await data.arrayBuffer();
                 const buffer = Buffer.from(arrayBuffer);
 
-                if (buffer.length === BUFFER_SIZE) {
-                    board = buffer;
+                if (loadAndMigrate(buffer)) {
                     console.log('Board loaded from Supabase!');
-                    // Save locally to cache
+                    // Save locally to cache force update size
                     fs.writeFileSync(BOARD_FILE, board);
                     loadedFromCloud = true;
                 } else {
-                    console.log('Supabase board size mismatch.');
+                    console.log('Supabase board size mismatch and migration failed.');
                 }
             }
         } catch (err) {
@@ -72,8 +93,7 @@ const initBoard = async () => {
         try {
             console.log('Loading board from local file (Fallback)...');
             const data = fs.readFileSync(BOARD_FILE);
-            if (data.length === BUFFER_SIZE) {
-                board = data;
+            if (loadAndMigrate(data)) {
                 console.log('Local board loaded.');
             } else {
                 console.log('Local board size mismatch, ignoring.');
