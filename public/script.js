@@ -716,6 +716,8 @@ canvas.addEventListener('mousedown', e => {
 
 // Line Tool State
 let lineStart = null;
+let lastCursorEmit = 0;
+let lastPaintEmit = 0;
 
 canvas.addEventListener('mousemove', e => {
     const { x, y } = screenToWorld(e.clientX, e.clientY);
