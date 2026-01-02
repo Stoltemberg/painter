@@ -41,6 +41,41 @@ const MAX_HISTORY = 20;
 const teamScores = { red: 0, blue: 0, green: 0 };
 const TEAMS = ['none', 'red', 'blue', 'green'];
 
+// Leaderboard Persistence
+const dirtyScores = new Map(); // guestId -> { name, score, team }
+let globalLeaderboard = [];
+
+async function syncScores() {
+    if (!supabase) return;
+
+    // 1. Upsert Dirty Scores
+    if (dirtyScores.size > 0) {
+        const updates = Array.from(dirtyScores.values());
+        dirtyScores.clear();
+
+        const { error } = await supabase.from('leaderboard').upsert(updates);
+        if (error) console.error('Score Sync Error:', error);
+    }
+
+    // 2. Fetch Global Top 10
+    const { data } = await supabase
+        .from('leaderboard')
+        .select('name, score')
+        .order('score', { ascending: false })
+        .limit(10);
+
+    if (data) {
+        globalLeaderboard = data;
+        io.emit('leaderboard', globalLeaderboard);
+    }
+
+    // Also sync team scores if we wanted to persist them, but they are RAM only for now?
+    // Let's keep team scores in RAM or sync them too? Request didn't specify, focused on "top artists".
+}
+
+// Sync Cache every 5s
+setInterval(syncScores, 5000);
+
 // Load board logic
 const initBoard = async () => {
     let loadedFromCloud = false;
@@ -275,8 +310,8 @@ const saveBoard = async () => {
 // Save every 10 seconds
 setInterval(saveBoard, 10000);
 
-// Helper to broadcast leaderboard
-function broadcastLeaderboard() {
+// Fallback RAM Leaderboard (no persistence)
+function broadcastLeaderboardLegacy() {
     const clients = [];
     io.sockets.sockets.forEach((s) => {
         if (s.pixelScore > 0) {
@@ -290,6 +325,7 @@ function broadcastLeaderboard() {
     io.emit('leaderboard', top5);
     io.emit('team_scores', teamScores);
 }
+
 
 // V7: Ink / Energy System
 // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
@@ -357,9 +393,23 @@ const getCompressedBoard = () => {
     return cachedCompressedBoard;
 };
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
+
+    // Load Persistence
+    const guestId = socket.handshake.query.guestId;
+    socket.guestId = guestId;
+    socket.pixelScore = 0;
+
+    if (supabase && guestId) {
+        const { data } = await supabase
+            .from('leaderboard')
+            .select('score')
+            .eq('id', guestId)
+            .single();
+        if (data) socket.pixelScore = data.score;
+    }
 
     // 1. Send Metadata
     socket.emit('board_info', { width: BOARD_WIDTH, height: BOARD_HEIGHT });
@@ -398,6 +448,8 @@ io.on('connection', (socket) => {
     // V7: Auth Handling (Join) - moved up or just use helper
 
     // Initial Leaderboard
+    socket.emit('leaderboard', globalLeaderboard);
+    socket.emit('team_scores', teamScores);
     broadcastLeaderboard();
 
     // Initial Ink
@@ -474,7 +526,20 @@ io.on('connection', (socket) => {
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
-            broadcastLeaderboard();
+
+            // Queue for Sync
+            if (supabase && socket.guestId) {
+                dirtyScores.set(socket.guestId, {
+                    id: socket.guestId,
+                    name: socket.name || 'Guest',
+                    score: socket.pixelScore,
+                    team: TEAMS[(data.t || 0)] || 'none'
+                });
+            } else {
+                // Fallback for non-supabase mode (RAM only)
+                broadcastLeaderboardLegacy();
+            }
+
             updateInk(socket); // Send update
         }
     });
