@@ -284,23 +284,7 @@ if (loginBtn) {
     });
 }
 
-// Handle Auth State Change
-supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-        handleUser(session.user);
-        if (authOverlay) authOverlay.style.display = 'none';
-        if (loginBtn) loginBtn.textContent = 'Logout';
-        // Add logout listener replacement?
-        loginBtn.onclick = () => supabase.auth.signOut();
-    } else if (event === 'SIGNED_OUT') {
-        myNickname = 'Guest';
-        if (nicknameInput) nicknameInput.value = myNickname;
-        if (loginBtn) {
-            loginBtn.textContent = 'Log In';
-            loginBtn.onclick = () => { if (authOverlay) authOverlay.style.display = 'flex'; };
-        }
-    }
-});
+// Auth State Change moved to initSupabase
 
 function handleUser(user) {
     // Use email part as nickname for now? 
@@ -1131,9 +1115,24 @@ async function initSupabase() {
             }
 
             // Auth Listener
+            // Auth Listener
             supabase.auth.onAuthStateChange((event, session) => {
                 console.log('Auth State Change:', event, session);
-                if (session) handleUser(session.user);
+                if (event === 'SIGNED_IN' && session) {
+                    handleUser(session.user);
+                    if (authOverlay) authOverlay.style.display = 'none';
+                    if (loginBtn) {
+                        loginBtn.textContent = 'Logout';
+                        loginBtn.onclick = () => supabase.auth.signOut();
+                    }
+                } else if (event === 'SIGNED_OUT') {
+                    myNickname = 'Guest';
+                    if (nicknameInput) nicknameInput.value = myNickname;
+                    if (loginBtn) {
+                        loginBtn.textContent = 'Log In';
+                        loginBtn.onclick = () => { if (authOverlay) authOverlay.style.display = 'flex'; };
+                    }
+                }
             });
         }
     } catch (e) {
