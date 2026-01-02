@@ -450,6 +450,7 @@ io.on('connection', async (socket) => {
     // Initial Leaderboard
     socket.emit('leaderboard', globalLeaderboard);
     socket.emit('team_scores', teamScores);
+    socket.emit('pixel_score', socket.pixelScore || 0);
     if (!supabase) broadcastLeaderboardLegacy();
 
     // Initial Ink

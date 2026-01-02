@@ -671,7 +671,7 @@ canvas.addEventListener('mousedown', e => {
             const py = y + pt.y;
             if (px >= 0 && px < boardSize && py >= 0 && py < boardSize) {
                 pixels.push({ x: px, y: py, r, g, b, t: myTeam });
-                drawPixel(px, py, r, g, b); // Optimistic
+                drawPixel(px, py, r, g, b, true); // Optimistic
             }
         });
 
@@ -834,7 +834,7 @@ canvas.addEventListener('mouseup', (e) => {
         });
         socket.emit('batch_pixels', pixels);
         // Draw local
-        pixels.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b));
+        pixels.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
         lineStart = null;
     }
     endInput();
@@ -920,7 +920,7 @@ function paint(clientX, clientY) {
             addRecentColor(hex);
         }
 
-        drawPixel(x, y, r, g, b);
+        drawPixel(x, y, r, g, b, true);
         playPop(); // Local sound
         socket.emit('pixel', { x, y, r, g, b, size: 1, t: myTeam });
         lastPaintEmit = now;
@@ -932,7 +932,7 @@ function paint(clientX, clientY) {
     }
 }
 
-function drawPixel(x, y, r, g, b) {
+function drawPixel(x, y, r, g, b, isLocal = false) {
     bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
     bufferCtx.fillRect(x, y, 1, 1);
     draw();
@@ -941,6 +941,13 @@ function drawPixel(x, y, r, g, b) {
     const mx = Math.floor(x / boardSize * 150);
     const my = Math.floor(y / boardSize * 150);
     minimapCtx.fillRect(mx, my, 1, 1);
+
+    // Update Score UI
+    if (isLocal) {
+        myPixelCount++;
+        const scoreEl = document.getElementById('myScore');
+        if (scoreEl) scoreEl.textContent = `${myPixelCount} px`;
+    }
 }
 
 // --- Socket ---
@@ -1146,21 +1153,42 @@ socket.on('board_chunk', (chunk) => {
 });
 
 socket.on('pixel', (data) => {
+    // ... existing pixel logic ...
     let x, y, r, g, b;
     if (data instanceof ArrayBuffer) {
+        // ...
         const dv = new DataView(data);
         x = dv.getUint16(0, true);
         y = dv.getUint16(2, true);
         r = dv.getUint8(4);
         g = dv.getUint8(5);
         b = dv.getUint8(6);
-        // tid = dv.getUint8(7); 
     } else {
         ({ x, y, r, g, b } = data);
     }
     drawPixel(x, y, r, g, b);
-    playPop(); // Remote sound
+    playPop();
 });
+
+// Update personal score on pixel placement
+let myPixelCount = 0;
+const scoreDisplay = document.createElement('span');
+scoreDisplay.id = 'myScore';
+scoreDisplay.textContent = '0 px';
+// Style tweak: align nicely in the glass group
+scoreDisplay.style.cssText = 'color:var(--accent); font-weight:bold; font-size:0.9rem; border-left:1px solid var(--glass-border); padding-left:8px; margin-left:8px;';
+
+// Insert score next to nickname input if not exists
+const glassGroup = document.querySelector('.glass-group');
+if (glassGroup && !document.getElementById('myScore')) {
+    glassGroup.appendChild(scoreDisplay);
+}
+
+socket.on('pixel_score', (score) => {
+    myPixelCount = score;
+    if (scoreDisplay) scoreDisplay.textContent = `${myPixelCount} px`;
+});
+
 
 // V6: Batch Pixels (Stamps)
 socket.on('batch_pixels', (data) => {
@@ -1397,8 +1425,11 @@ socket.on('chat_history', (history) => {
 const leaderboardDiv = document.getElementById('leaderboard');
 socket.on('leaderboard', (data) => {
     if (!leaderboardDiv) return;
+    if (!leaderboardDiv) return;
     if (data.length === 0) {
-        leaderboardDiv.style.display = 'none';
+        // Show empty state instead of hiding
+        leaderboardDiv.style.display = 'block';
+        leaderboardDiv.innerHTML = '<h3>🏆 Top Artists</h3><div style="text-align:center;color:#888;font-size:0.8rem;">No scores yet</div>';
         return;
     }
     leaderboardDiv.style.display = 'block';
