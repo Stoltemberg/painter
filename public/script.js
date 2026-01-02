@@ -75,7 +75,11 @@ const stampOpts = document.querySelectorAll('.stamp-opt'); // V6
 const fillBtn = document.getElementById('fillBtn');
 const lineBtn = document.getElementById('lineBtn');
 const exportBtn = document.getElementById('exportBtn');
+const viewModeBtn = document.getElementById('viewModeBtn');
 const soundBtn = document.getElementById('soundBtn');
+
+// View Mode State
+let isRestrictedView = false;
 // ... other DOM elements ...
 
 // Stamp Shapes (Relative Coordinates)
@@ -329,6 +333,28 @@ if (exportBtn) {
     });
 }
 
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = `pixel-board-${Date.now()}.png`;
+        link.href = bufferCanvas.toDataURL('image/png');
+        link.click();
+    });
+}
+
+if (viewModeBtn) {
+    viewModeBtn.addEventListener('click', () => {
+        isRestrictedView = !isRestrictedView;
+        viewModeBtn.textContent = isRestrictedView ? '🔒' : '🔓';
+        viewModeBtn.title = isRestrictedView ? 'Restricted View (Locked)' : 'Infinite View (Unlocked)';
+        if (isRestrictedView) {
+            clampView();
+            draw();
+            updateMinimapViewport();
+        }
+    });
+}
+
 // --- Teleport ---
 if (teleBtn) {
     teleBtn.addEventListener('click', () => {
@@ -452,6 +478,30 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 resize();
+
+window.addEventListener('resize', resize);
+resize();
+
+function clampView() {
+    if (!isRestrictedView) return;
+
+    // 1. Zoom Restriction: Must fit board
+    const minScale = Math.max(canvas.width / boardSize, canvas.height / boardSize);
+    if (scale < minScale) scale = minScale;
+
+    // 2. Pan Restriction: Keep viewport inside board
+    const visibleW = canvas.width / scale;
+    const visibleH = canvas.height / scale;
+
+    const maxOffsetX = boardSize - visibleW;
+    const maxOffsetY = boardSize - visibleH;
+
+    // Apply clamp
+    if (offsetX < 0) offsetX = 0;
+    if (offsetY < 0) offsetY = 0;
+    if (offsetX > maxOffsetX) offsetX = maxOffsetX;
+    if (offsetY > maxOffsetY) offsetY = maxOffsetY;
+}
 
 // --- Rendering ---
 function draw() {
@@ -634,14 +684,6 @@ canvas.addEventListener('touchmove', e => {
             // Limit zoom
             if (newScale > 0.05 && newScale < 50) {
                 // Zoom towards center of pinch (cx, cy)
-                // Math: worldPoint = screen / scale + offset
-                // We want worldPoint to stay at screenPoint
-
-                // 1. Get world point before zoom
-                // Note: offsetX/Y were just updated for pan. 
-                // To zoom accurately around pinch center is tricky combined with pan.
-                // Simple approach: Apply zoom relative to center of screen or keep simple.
-                // Better approach: 
                 const rect = canvas.getBoundingClientRect();
                 const mx = cx - rect.left;
                 const my = cy - rect.top;
@@ -653,6 +695,7 @@ canvas.addEventListener('touchmove', e => {
 
                 offsetX = wx - mx / scale;
                 offsetY = wy - my / scale;
+                clampView();
             }
         }
 
@@ -842,6 +885,7 @@ canvas.addEventListener('mousemove', e => {
         const dy = e.clientY - lastY;
         offsetY -= dy / scale;
         offsetX -= dx / scale;
+        clampView();
         lastX = e.clientX;
         lastY = e.clientY;
         draw();
@@ -916,6 +960,7 @@ canvas.addEventListener('wheel', e => {
 
     offsetX = wx - mx / scale;
     offsetY = wy - my / scale;
+    clampView();
 
     draw();
     updateMinimapViewport();
