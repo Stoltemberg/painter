@@ -695,6 +695,9 @@ minimapCanvas.addEventListener('mousedown', e => {
 // --- Mouse Events ---
 // ...
 
+// --- Mouse Events ---
+// ...
+
 socket.on('chat', (msg) => {
     addChatMessage(msg.text, msg.id === socket.id, msg.name);
 });
@@ -712,4 +715,114 @@ socket.on('chat_history', (history) => {
     div.style.textAlign = 'center';
     div.textContent = '--- Chat History Loaded ---';
     chatMessages.appendChild(div);
+});
+
+// V5: Leaderboard
+const leaderboardDiv = document.getElementById('leaderboard');
+socket.on('leaderboard', (data) => {
+    if (!leaderboardDiv) return;
+    if (data.length === 0) {
+        leaderboardDiv.style.display = 'none';
+        return;
+    }
+    leaderboardDiv.style.display = 'block';
+
+    let html = `<h3>🏆 Top Artists</h3>`;
+    data.forEach(p => {
+        html += `
+            <div class="leaderboard-item">
+                <span>${p.name.substring(0, 10)}</span>
+                <span class="leaderboard-score">${p.score}px</span>
+            </div>
+        `;
+    });
+    leaderboardDiv.innerHTML = html;
+});
+
+// V5: Grid Toggle
+const gridBtn = document.getElementById('gridBtn');
+let showGridOverride = false;
+if (gridBtn) {
+    gridBtn.addEventListener('click', () => {
+        showGridOverride = !showGridOverride;
+        gridBtn.style.border = showGridOverride ? '2px solid #4ade80' : '1px solid #555';
+        draw(); // Redraw immediately
+    });
+}
+
+// Modify draw() function is tricky without full replace, but I can hook into render loop?
+// Actually I need to find the `draw` function and update grid logic.
+// For now, let's assume `draw` calls some grid logic depending on scale.
+// I will just update the variable `showGridOverride` which I'll use in a replaced draw function if needed,
+// OR I can re-implement the draw function logic here if I had access.
+// Wait, I cannot modify functions "in place" without replacing them.
+// I'll check `script.js` again for `draw()` function. 
+
+// V5: Share Position
+const coordsDiv = document.getElementById('coords');
+if (coordsDiv) {
+    coordsDiv.style.cursor = 'pointer';
+    coordsDiv.title = 'Click to copy coordinates';
+    coordsDiv.addEventListener('click', () => {
+        const text = coordsDiv.textContent; // "X: 123, Y: 456"
+        navigator.clipboard.writeText(text).then(() => {
+            const original = coordsDiv.style.color;
+            coordsDiv.style.color = '#4ade80';
+            coordsDiv.textContent = 'Copied!';
+            setTimeout(() => {
+                coordsDiv.textContent = text;
+                coordsDiv.style.color = original;
+            }, 1000);
+        });
+    });
+}
+
+// V5: Bucket Fill Tool & Event
+const fillBtn = document.getElementById('fillBtn');
+if (fillBtn) {
+    fillBtn.addEventListener('click', () => {
+        currentMode = 'fill';
+        canvas.style.cursor = 'alias';
+        fillBtn.style.border = '2px solid #4ade80';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+    });
+}
+
+socket.on('fill', (data) => {
+    // data: { x, y, r, g, b, targetR, targetG, targetB }
+    // Execute local flood fill to update view visually
+    const { x, y, r, g, b, targetR, targetG, targetB } = data;
+
+    // Simple iterative BFS to update local buffer
+    // Limit 5000 to match server
+    const queue = [[x, y]];
+    const visited = new Set();
+    const MAX = 5000;
+    let count = 0;
+
+    while (queue.length > 0 && count < MAX) {
+        const [cx, cy] = queue.shift();
+        const key = `${cx},${cy}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        // Check color
+        const pixel = bufferCtx.getImageData(cx, cy, 1, 1).data; // Slow?
+        // Better: Access buffer directly? Client doesn't have easy direct array access without keeping a copy.
+        // `bufferCtx` is fine for client side visualization.
+
+        if (pixel[0] === targetR && pixel[1] === targetG && pixel[2] === targetB) {
+            // Fill
+            bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
+            bufferCtx.fillRect(cx, cy, 1, 1);
+            count++;
+
+            if (cx > 0) queue.push([cx - 1, cy]);
+            if (cx < boardSize - 1) queue.push([cx + 1, cy]);
+            if (cy > 0) queue.push([cx, cy - 1]);
+            if (cy < boardSize - 1) queue.push([cx, cy + 1]);
+        }
+    }
+    draw();
 });

@@ -173,6 +173,21 @@ const saveBoard = async () => {
 // Save every 10 seconds
 setInterval(saveBoard, 10000);
 
+// Helper to broadcast leaderboard
+function broadcastLeaderboard() {
+    const clients = [];
+    io.sockets.sockets.forEach((s) => {
+        if (s.pixelScore > 0) {
+            clients.push({ name: s.name || 'Anon', score: s.pixelScore });
+        }
+    });
+    // Sort desc
+    clients.sort((a, b) => b.score - a.score);
+    // Top 5
+    const top5 = clients.slice(0, 5);
+    io.emit('leaderboard', top5);
+}
+
 io.on('connection', (socket) => {
     // console.log('A user connected');
     io.emit('online_count', io.engine.clientsCount);
@@ -180,11 +195,15 @@ io.on('connection', (socket) => {
     // Send Chat History
     socket.emit('chat_history', chatHistory);
 
+    // Initial Leaderboard
+    broadcastLeaderboard();
+
     // System Join Message
     socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
 
     socket.emit('init', board);
 
+    // V5: Leaderboard Tracking
     socket.on('pixel', (data) => {
         const { x, y, r, g, b, size = 1 } = data; // Default size 1
 
@@ -196,6 +215,7 @@ io.on('connection', (socket) => {
         const endY = Math.min(BOARD_HEIGHT, y - half + size);
 
         let changed = false;
+        let pixelCount = 0;
 
         for (let py = startY; py < endY; py++) {
             for (let px = startX; px < endX; px++) {
@@ -207,6 +227,7 @@ io.on('connection', (socket) => {
                     board[index + 1] = g;
                     board[index + 2] = b;
                     changed = true;
+                    pixelCount++;
                 }
             }
         }
@@ -215,12 +236,84 @@ io.on('connection', (socket) => {
             needsSave = true;
             // Broadcast the brush stroke itself, let clients handle the loop aka "drawRect"
             socket.broadcast.emit('pixel', { x, y, r, g, b, size });
+
+            // Leaderboard Update
+            if (!socket.pixelScore) socket.pixelScore = 0;
+            socket.pixelScore += pixelCount;
+            broadcastLeaderboard();
+        }
+    });
+
+    // V5: Bucket Fill (Flood Fill)
+    socket.on('fill', (data) => {
+        const { x, y, r, g, b } = data;
+
+        // Basic validation
+        if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) return;
+
+        const targetIndex = (y * BOARD_WIDTH + x) * 3;
+        const targetR = board[targetIndex];
+        const targetG = board[targetIndex + 1];
+        const targetB = board[targetIndex + 2];
+
+        // Don't fill if same color
+        if (targetR === r && targetG === g && targetB === b) return;
+
+        // BFS Flood Fill
+        const queue = [[x, y]];
+        const visited = new Set();
+        const MAX_FILL = 5000; // Limit to prevent server freeze
+        let pixelsFilled = 0;
+        let changed = false;
+
+        while (queue.length > 0 && pixelsFilled < MAX_FILL) {
+            const [cx, cy] = queue.shift();
+            const key = `${cx},${cy}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            const idx = (cy * BOARD_WIDTH + cx) * 3;
+
+            // color match check
+            if (board[idx] === targetR && board[idx + 1] === targetG && board[idx + 2] === targetB) {
+                // Fill
+                board[idx] = r;
+                board[idx + 1] = g;
+                board[idx + 2] = b;
+                pixelsFilled++;
+                changed = true;
+
+                // Add neighbors
+                if (cx > 0) queue.push([cx - 1, cy]);
+                if (cx < BOARD_WIDTH - 1) queue.push([cx + 1, cy]);
+                if (cy > 0) queue.push([cx, cy - 1]);
+                if (cy < BOARD_HEIGHT - 1) queue.push([cx, cy + 1]);
+            }
+        }
+
+        if (changed) {
+            needsSave = true;
+            // Emit special fill event so clients can do the same BFS or just reload (reload is safer for complex shapes but BFS is cooler)
+            // For now, let's just tell clients to run the fill logic locally at (x,y) with new color?
+            // Or send all pixels? Sending 5000 pixels is heavy.
+            // Best approach: Tell clients "Fill at X,Y with Color C replacing TargetColor T".
+            // But client board might be slightly out of sync.
+            // Let's send the command: "Fill starting at x,y with r,g,b". Client does same BFS.
+            io.emit('fill', { x, y, r, g, b, targetR, targetG, targetB });
+
+            // Update score
+            if (!socket.pixelScore) socket.pixelScore = 0;
+            socket.pixelScore += pixelsFilled;
+            broadcastLeaderboard();
         }
     });
 
     socket.on('cursor', (data) => {
         // Broadcast cursor position to everyone else
         // data: { x, y, name }
+        // Update name in socket for leaderboard
+        socket.name = data.name || 'Anon';
+
         socket.broadcast.emit('cursor', {
             id: socket.id,
             x: data.x,
