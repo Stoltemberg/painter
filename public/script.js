@@ -1387,27 +1387,7 @@ socket.on('batch_pixels', (data) => {
     playPop();
 });
 
-socket.on('team_scores', (scores) => {
-    const lb = document.getElementById('leaderboard');
-    if (lb) {
-        let html = lb.innerHTML;
-        if (!html.includes('Team Red')) {
-            html += '<div style="margin-top:10px; border-top:1px solid #444; padding-top:5px;">';
-            html += `<div style="color:#f87171">🔴 Red: <span id="score-red">${scores.red}</span></div>`;
-            html += `<div style="color:#60a5fa">🔵 Blue: <span id="score-blue">${scores.blue}</span></div>`;
-            html += `<div style="color:#4ade80">🟢 Green: <span id="score-green">${scores.green}</span></div>`;
-            html += '</div>';
-            lb.innerHTML = html;
-        } else {
-            const rr = document.getElementById('score-red');
-            const bb = document.getElementById('score-blue');
-            const gg = document.getElementById('score-green');
-            if (rr) rr.textContent = scores.red;
-            if (bb) bb.textContent = scores.blue;
-            if (gg) gg.textContent = scores.green;
-        }
-    }
-});
+
 
 // V6: Reactions (Emotes)
 socket.on('reaction', (data) => {
