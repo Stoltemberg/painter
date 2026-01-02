@@ -321,7 +321,8 @@ if (themeBtn) {
 
 // Spectator Mode
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'h' && document.activeElement !== chatInput && document.activeElement !== nicknameInput) {
+    // Ignore if typing in any input field
+    if (e.key === 'h' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         uiLayer.classList.toggle('hidden-ui');
     }
 });
