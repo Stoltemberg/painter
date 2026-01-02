@@ -240,12 +240,92 @@ let showGridOverride = false;
 let hoverPos = null;
 
 // UI Setup
-if (nicknameInput) {
-    nicknameInput.value = myNickname;
-    nicknameInput.addEventListener('change', () => {
-        myNickname = nicknameInput.value.substring(0, 15) || 'Guest';
-        localStorage.setItem('painter_nickname', myNickname);
+// Auth DOM Elements
+const authOverlay = document.getElementById('authOverlay');
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const signInBtn = document.getElementById('signInBtn');
+const signUpBtn = document.getElementById('signUpBtn');
+const closeAuthBtn = document.getElementById('closeAuthBtn');
+const authStatus = document.getElementById('authStatus');
+const loginBtn = document.getElementById('loginBtn'); // In Top Bar
+
+// Check Session on Load
+supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+        handleUser(session.user);
+    } else {
+        // Show auth modal on start if not guest preference?
+        // For now, let's show it if no session
+        if (authOverlay) authOverlay.style.display = 'flex';
+    }
+});
+
+// Auth Listeners
+if (signInBtn) {
+    signInBtn.addEventListener('click', async () => {
+        authStatus.textContent = 'Logging in...';
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: emailInput.value,
+            password: passwordInput.value,
+        });
+        if (error) authStatus.textContent = error.message;
+        else {
+            authStatus.textContent = '';
+            if (authOverlay) authOverlay.style.display = 'none';
+        }
     });
+}
+
+if (signUpBtn) {
+    signUpBtn.addEventListener('click', async () => {
+        authStatus.textContent = 'Signing up...';
+        const { data, error } = await supabase.auth.signUp({
+            email: emailInput.value,
+            password: passwordInput.value,
+        });
+        if (error) authStatus.textContent = error.message;
+        else {
+            authStatus.textContent = 'Check your email for confirmation!';
+        }
+    });
+}
+
+if (closeAuthBtn) {
+    closeAuthBtn.addEventListener('click', () => {
+        if (authOverlay) authOverlay.style.display = 'none';
+    });
+}
+
+if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+        if (authOverlay) authOverlay.style.display = 'flex';
+    });
+}
+
+// Handle Auth State Change
+supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+        handleUser(session.user);
+        if (authOverlay) authOverlay.style.display = 'none';
+        if (loginBtn) loginBtn.textContent = 'Logout';
+        // Add logout listener replacement?
+        loginBtn.onclick = () => supabase.auth.signOut();
+    } else if (event === 'SIGNED_OUT') {
+        myNickname = 'Guest';
+        if (nicknameInput) nicknameInput.value = myNickname;
+        if (loginBtn) {
+            loginBtn.textContent = 'Log In';
+            loginBtn.onclick = () => { if (authOverlay) authOverlay.style.display = 'flex'; };
+        }
+    }
+});
+
+function handleUser(user) {
+    // Use email part as nickname for now? 
+    // Or allow nickname update.
+    myNickname = user.email.split('@')[0];
+    if (nicknameInput) nicknameInput.value = myNickname;
 }
 
 // Teams
@@ -1050,7 +1130,6 @@ function drawPixel(x, y, r, g, b, isLocal = false) {
 // Step 944 shows lines 600-650. Line 633 is `let supabase = null;`.
 // If grep found 2, maybe I pasted it twice in the same block?
 // I will remove this specific line.
-const loginBtn = document.getElementById('loginBtn');
 const inkValue = document.getElementById('inkValue');
 const inkFill = document.getElementById('inkFill');
 let ink = 0;
