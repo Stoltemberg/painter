@@ -1108,21 +1108,32 @@ async function initSupabase() {
             // Check if loaded
             if (typeof window.supabase === 'undefined') {
                 console.error('Supabase library not loaded. Check script tag.');
+                console.log('Window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
                 return;
             }
 
-            // CDN usually exposes 'supabase.createClient' or just 'createClient' on the global if using a different build.
-            // But strict UMD '@supabase/supabase-js' exposes 'supabase' global with 'createClient' property.
+            console.log('window.supabase type:', typeof window.supabase);
+            console.log('window.supabase keys:', Object.keys(window.supabase));
+            if (window.supabase.default) console.log('window.supabase.default keys:', Object.keys(window.supabase.default));
+
+            // Try to find createClient
+            // Try to find createClient
             try {
-                supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-            } catch (err) {
-                console.warn('Standard init failed, trying fallback...');
-                // Sometimes it might be window.supabase.default.createClient depending on bundler
-                if (window.supabase.default && window.supabase.default.createClient) {
+                if (window.supabase && typeof window.supabase.createClient === 'function') {
+                    supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
+                } else if (window.supabase && window.supabase.default && typeof window.supabase.default.createClient === 'function') {
                     supabase = window.supabase.default.createClient(config.supabaseUrl, config.supabaseKey);
+                } else if (typeof window.Supabase !== 'undefined' && typeof window.Supabase.createClient === 'function') {
+                    supabase = window.Supabase.createClient(config.supabaseUrl, config.supabaseKey);
+                } else if (typeof window.createClient === 'function') {
+                    supabase = window.createClient(config.supabaseUrl, config.supabaseKey);
                 } else {
-                    throw err;
+                    console.error('Supabase Globals:', window.supabase);
+                    throw new Error('Could not find createClient. Check console for window.supabase structure.');
                 }
+            } catch (err) {
+                console.error('Failed to find createClient:', err);
+                return;
             }
 
             console.log('Supabase Client Initialized');
@@ -1157,7 +1168,8 @@ async function initSupabase() {
         console.error('Failed to init Supabase:', e);
     }
 }
-initSupabase();
+// Removed module-level initSupabase() call to prevent double-init.
+// initApp() handles it.
 
 function handleUser(user) {
     if (!loginBtn) return;
