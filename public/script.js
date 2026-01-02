@@ -290,7 +290,7 @@ function draw() {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bufferCanvas, 0, 0);
 
-    if (scale > 15) {
+    if (scale > 15 || (typeof showGridOverride !== 'undefined' && showGridOverride)) {
         const vx = Math.max(0, offsetX);
         const vy = Math.max(0, offsetY);
         const vw = canvas.width / scale;
@@ -759,7 +759,6 @@ if (gridBtn) {
 // I'll check `script.js` again for `draw()` function. 
 
 // V5: Share Position
-const coordsDiv = document.getElementById('coords');
 if (coordsDiv) {
     coordsDiv.style.cursor = 'pointer';
     coordsDiv.title = 'Click to copy coordinates';
