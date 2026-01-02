@@ -80,6 +80,7 @@ let currentMode = 'brush';
 let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
 let soundEnabled = true;
 let myNickname = localStorage.getItem('painter_nickname') || 'Guest';
+let showGridOverride = false;
 
 // UI Setup
 if (nicknameInput) {
@@ -741,7 +742,6 @@ socket.on('leaderboard', (data) => {
 
 // V5: Grid Toggle
 const gridBtn = document.getElementById('gridBtn');
-let showGridOverride = false;
 if (gridBtn) {
     gridBtn.addEventListener('click', () => {
         showGridOverride = !showGridOverride;
