@@ -25,7 +25,6 @@ if (brushBtn) {
         brushBtn.style.border = '2px solid #4ade80';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
     });
 }
 
@@ -36,7 +35,6 @@ if (eraserBtn) {
         eraserBtn.style.border = '2px solid #4ade80';
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555'; // Reset fill too
     });
 }
 
@@ -47,7 +45,6 @@ if (pipetteBtn) {
         pipetteBtn.style.border = '2px solid #4ade80';
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
     });
 }
 
@@ -66,7 +63,6 @@ if (colorPicker) {
         canvas.style.cursor = 'crosshair';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
     });
     // ...
 }
@@ -477,23 +473,6 @@ canvas.addEventListener('mousedown', e => {
         return; // Don't paint
     }
 
-    // FILL LOGIC
-    if (currentMode === 'fill' && e.button === 0) {
-        const { x, y } = screenToWorld(e.clientX, e.clientY);
-        if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
-            const hex = colorPicker.value;
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-
-            // Visual feedback - maybe play a sound?
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            // playPop(); 
-
-            socket.emit('fill', { x, y, r, g, b });
-        }
-        return;
-    }
 
     if (e.button === 0) {
         isPainting = true;
@@ -810,54 +789,3 @@ if (coordsDiv) {
         });
     });
 }
-
-// V5: Bucket Fill Tool & Event
-const fillBtn = document.getElementById('fillBtn');
-if (fillBtn) {
-    fillBtn.addEventListener('click', () => {
-        currentMode = 'fill';
-        canvas.style.cursor = 'alias';
-        fillBtn.style.border = '2px solid #4ade80';
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-    });
-}
-
-socket.on('fill', (data) => {
-    // data: { x, y, r, g, b, targetR, targetG, targetB }
-    // Execute local flood fill to update view visually
-    const { x, y, r, g, b, targetR, targetG, targetB } = data;
-
-    // Simple iterative BFS to update local buffer
-    // Limit 5000 to match server
-    const queue = [[x, y]];
-    const visited = new Set();
-    const MAX = 5000;
-    let count = 0;
-
-    while (queue.length > 0 && count < MAX) {
-        const [cx, cy] = queue.shift();
-        const key = `${cx},${cy}`;
-        if (visited.has(key)) continue;
-        visited.add(key);
-
-        // Check color
-        const pixel = bufferCtx.getImageData(cx, cy, 1, 1).data; // Slow?
-        // Better: Access buffer directly? Client doesn't have easy direct array access without keeping a copy.
-        // `bufferCtx` is fine for client side visualization.
-
-        if (pixel[0] === targetR && pixel[1] === targetG && pixel[2] === targetB) {
-            // Fill
-            bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
-            bufferCtx.fillRect(cx, cy, 1, 1);
-            count++;
-
-            if (cx > 0) queue.push([cx - 1, cy]);
-            if (cx < boardSize - 1) queue.push([cx + 1, cy]);
-            if (cy > 0) queue.push([cx, cy - 1]);
-            if (cy < boardSize - 1) queue.push([cx, cy + 1]);
-        }
-    }
-    draw();
-});

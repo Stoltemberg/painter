@@ -1,17 +1,20 @@
 :root {
-    --bg-color: #1a1a1a;
-    --text-color: white;
-    --panel-bg: rgba(0, 0, 0, 0.8);
-    --border-color: rgba(255, 255, 255, 0.2);
+    --bg-color: #121212;
+    --text-color: rgba(255, 255, 255, 0.9);
+    --glass-bg: rgba(20, 20, 20, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
     --accent: #4ade80;
+    --shadow-soft: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --backdrop-blur: 12px;
 }
 
 .light-mode {
-    --bg-color: #f0f0f0;
-    --text-color: #333;
-    --panel-bg: rgba(255, 255, 255, 0.9);
-    --border-color: rgba(0, 0, 0, 0.2);
+    --bg-color: #eef2f3;
+    --text-color: #1f2937;
+    --glass-bg: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.4);
     --accent: #2563eb;
+    --shadow-soft: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 body,
@@ -22,9 +25,10 @@ html {
     height: 100%;
     overflow: hidden;
     background-color: var(--bg-color);
-    font-family: 'Inter', sans-serif;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    /* Prefer modern rounded sans */
     color: var(--text-color);
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 #board {
@@ -114,34 +118,50 @@ html {
 /* Top Bar */
 .top-bar {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    background: var(--panel-bg);
-    padding: 8px 15px;
-    border-radius: 20px;
+    top: 20px;
+    left: 20px;
     display: flex;
-    gap: 15px;
-    font-size: 0.9rem;
-    backdrop-filter: blur(5px);
-    border: 1px solid var(--border-color);
-    pointer-events: auto;
+    gap: 12px;
+    pointer-events: none;
+    /* Container doesn't block, children do */
 }
 
 .coords,
-.online-count {
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 15px;
-    border-radius: 20px;
+.online-count,
+#nicknameInput {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+    border: 1px solid var(--glass-border);
+    padding: 10px 16px;
+    border-radius: 16px;
     font-size: 0.9rem;
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 500;
+    pointer-events: auto;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s ease;
 }
 
 .online-count {
-    color: #4ade80;
-    /* Green */
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
+#nicknameInput {
+    color: var(--text-color);
+    width: 120px;
+    text-align: center;
+    outline: none;
+}
+
+#nicknameInput:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+}
+
+/* Palette */
 /* Palette */
 /* Palette */
 .palette {
@@ -149,30 +169,58 @@ html {
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--panel-bg);
-    padding: 10px 20px;
-    border-radius: 50px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+    padding: 12px 24px;
+    border-radius: 24px;
     display: flex;
     align-items: center;
-    gap: 15px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-color);
+    gap: 20px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--glass-border);
     pointer-events: auto;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.palette:hover {
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+    transform: translateX(-50%) translateY(-2px);
 }
 
 .color-section {
     display: flex;
     align-items: center;
+    position: relative;
 }
 
 #colorPicker {
+    -webkit-appearance: none;
+    appearance: none;
     border: none;
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     background: none;
     cursor: pointer;
     padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s;
+}
+
+#colorPicker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+#colorPicker::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+#colorPicker:hover {
+    transform: scale(1.1);
 }
 
 /* Recent Colors */
@@ -201,20 +249,28 @@ html {
 /* Teleport */
 .teleport-bar {
     display: flex;
-    gap: 5px;
-    padding-left: 10px;
-    border-left: 1px solid var(--border-color);
+    gap: 8px;
+    padding-left: 15px;
+    border-left: 1px solid var(--glass-border);
+    margin-left: 5px;
 }
 
 .teleport-bar input {
     width: 50px;
-    background: rgba(0, 0, 0, 0.3);
-    /* Keep semi-transparent for inputs on top of blur */
-    border: 1px solid #555;
-    color: white;
-    /* Always white inside dark inputs for now, or use var if needed */
-    border-radius: 4px;
-    padding: 2px 5px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: var(--text-color);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.teleport-bar input:focus {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
 }
 
 /* Instructions */
@@ -319,18 +375,25 @@ html {
 }
 
 /* Minimap */
+/* Minimap */
 .minimap-container {
     position: absolute;
     bottom: 30px;
     right: 30px;
     width: 150px;
     height: 150px;
-    background: #000;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    /* Keep dark for contrast */
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
     overflow: hidden;
     pointer-events: auto;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.3s ease;
+}
+
+.minimap-container:hover {
+    transform: scale(1.02);
 }
 
 #minimap {
@@ -343,8 +406,8 @@ html {
     position: absolute;
     top: 0;
     left: 0;
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4);
+    border: 1px solid white;
+    box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.6);
     /* Dim outside */
     pointer-events: none;
 }
@@ -352,36 +415,41 @@ html {
 /* Leaderboard */
 .leaderboard {
     position: absolute;
-    top: 60px;
+    top: 80px;
     right: 20px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 10px;
-    border-radius: 8px;
-    color: white;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+    padding: 15px;
+    border-radius: 16px;
+    color: var(--text-color);
     font-size: 0.9rem;
     pointer-events: none;
     z-index: 90;
-    min-width: 150px;
-    backdrop-filter: blur(5px);
+    min-width: 180px;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-soft);
     transition: all 0.2s;
 }
 
 .leaderboard h3 {
-    margin: 0 0 10px 0;
-    font-size: 0.9rem;
-    color: #ffd700;
+    margin: 0 0 12px 0;
+    font-size: 0.85rem;
+    color: var(--accent);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
     text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 5px;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 8px;
 }
 
 .leaderboard-item {
     display: flex;
     justify-content: space-between;
     gap: 15px;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    opacity: 0.9;
 }
 
 .leaderboard-item:last-child {
@@ -389,12 +457,15 @@ html {
 }
 
 .leaderboard-score {
-    color: #4ade80;
+    color: var(--accent);
     font-weight: bold;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 8px;
 }
 
 .light-mode .leaderboard {
-    background: rgba(255, 255, 255, 0.8);
-    color: #111;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: var(--glass-bg);
+    color: var(--text-color);
+    box-shadow: var(--shadow-soft);
 }

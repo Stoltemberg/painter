@@ -244,69 +244,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // V5: Bucket Fill (Flood Fill)
-    socket.on('fill', (data) => {
-        const { x, y, r, g, b } = data;
 
-        // Basic validation
-        if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) return;
-
-        const targetIndex = (y * BOARD_WIDTH + x) * 3;
-        const targetR = board[targetIndex];
-        const targetG = board[targetIndex + 1];
-        const targetB = board[targetIndex + 2];
-
-        // Don't fill if same color
-        if (targetR === r && targetG === g && targetB === b) return;
-
-        // BFS Flood Fill
-        const queue = [[x, y]];
-        const visited = new Set();
-        const MAX_FILL = 5000; // Limit to prevent server freeze
-        let pixelsFilled = 0;
-        let changed = false;
-
-        while (queue.length > 0 && pixelsFilled < MAX_FILL) {
-            const [cx, cy] = queue.shift();
-            const key = `${cx},${cy}`;
-            if (visited.has(key)) continue;
-            visited.add(key);
-
-            const idx = (cy * BOARD_WIDTH + cx) * 3;
-
-            // color match check
-            if (board[idx] === targetR && board[idx + 1] === targetG && board[idx + 2] === targetB) {
-                // Fill
-                board[idx] = r;
-                board[idx + 1] = g;
-                board[idx + 2] = b;
-                pixelsFilled++;
-                changed = true;
-
-                // Add neighbors
-                if (cx > 0) queue.push([cx - 1, cy]);
-                if (cx < BOARD_WIDTH - 1) queue.push([cx + 1, cy]);
-                if (cy > 0) queue.push([cx, cy - 1]);
-                if (cy < BOARD_HEIGHT - 1) queue.push([cx, cy + 1]);
-            }
-        }
-
-        if (changed) {
-            needsSave = true;
-            // Emit special fill event so clients can do the same BFS or just reload (reload is safer for complex shapes but BFS is cooler)
-            // For now, let's just tell clients to run the fill logic locally at (x,y) with new color?
-            // Or send all pixels? Sending 5000 pixels is heavy.
-            // Best approach: Tell clients "Fill at X,Y with Color C replacing TargetColor T".
-            // But client board might be slightly out of sync.
-            // Let's send the command: "Fill starting at x,y with r,g,b". Client does same BFS.
-            io.emit('fill', { x, y, r, g, b, targetR, targetG, targetB });
-
-            // Update score
-            if (!socket.pixelScore) socket.pixelScore = 0;
-            socket.pixelScore += pixelsFilled;
-            broadcastLeaderboard();
-        }
-    });
 
     socket.on('cursor', (data) => {
         // Broadcast cursor position to everyone else
