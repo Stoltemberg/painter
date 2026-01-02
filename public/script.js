@@ -45,18 +45,8 @@ async function saveCache(blob) {
 }
 
 // Attempt load on start
-loadCache().then(blob => {
-    if (blob) {
-        const img = new Image();
-        img.src = URL.createObjectURL(blob);
-        img.onload = () => {
-            bufferCtx.drawImage(img, 0, 0);
-            draw();
-            updateMinimap();
-            if (statusDiv) statusDiv.textContent = 'Loaded from Cache (Syncing...)';
-        };
-    }
-});
+// Load cache moved to end
+// Attempt load on start
 
 // DOM Elements
 const canvas = document.getElementById('board');
@@ -250,16 +240,7 @@ const closeAuthBtn = document.getElementById('closeAuthBtn');
 const authStatus = document.getElementById('authStatus');
 const loginBtn = document.getElementById('loginBtn'); // In Top Bar
 
-// Check Session on Load
-supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session) {
-        handleUser(session.user);
-    } else {
-        // Show auth modal on start if not guest preference?
-        // For now, let's show it if no session
-        if (authOverlay) authOverlay.style.display = 'flex';
-    }
-});
+// Check Session on Load moved to initSupabase
 
 // Auth Listeners
 if (signInBtn) {
@@ -1731,3 +1712,24 @@ function showReaction(data) {
         div.remove();
     }, 1000);
 }
+
+// --- Initialization ---
+async function initApp() {
+    await initSupabase();
+
+    // Load Cache AFTER bufferCtx is initialized
+    const blob = await loadCache();
+    if (blob) {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+            bufferCtx.drawImage(img, 0, 0);
+            draw();
+            updateMinimap();
+            if (statusDiv) statusDiv.textContent = 'Loaded from Cache';
+        };
+    }
+}
+
+// Start App
+initApp();

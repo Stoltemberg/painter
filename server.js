@@ -429,6 +429,11 @@ io.on('connection', async (socket) => {
         if (data) socket.pixelScore = data.score;
     }
 
+    // Send current scores
+    socket.emit('pixel_score', socket.pixelScore);
+    socket.emit('leaderboard', globalLeaderboard);
+    socket.emit('team_scores', teamScores); // V7: Initial Team Scores
+
     // 1. Send Metadata
     socket.emit('board_info', { width: BOARD_WIDTH, height: BOARD_HEIGHT });
 
@@ -562,6 +567,7 @@ io.on('connection', async (socket) => {
             // Real-time Update
             updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
             io.emit('leaderboard', globalLeaderboard);
+            io.emit('team_scores', teamScores); // V7: Team Score
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
@@ -646,6 +652,7 @@ io.on('connection', async (socket) => {
             // Real-time Update
             updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
             io.emit('leaderboard', globalLeaderboard);
+            io.emit('team_scores', teamScores); // V7: Broadcast Team Scores
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
