@@ -89,7 +89,50 @@ initBoard();
 
 app.use(express.static('public'));
 
-// Persistence
+// --- Middleware: Simple Basic Auth ---
+const basicAuth = (req, res, next) => {
+    const auth = { login: 'admin', password: 'admin123' }; // TODO: Env vars
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+    if (login && password && login === auth.login && password === auth.password) {
+        return next();
+    }
+
+    res.set('WWW-Authenticate', 'Basic realm="Admin Area"');
+    res.status(401).send('Authentication required.');
+};
+
+// --- Admin Routes ---
+app.get('/admin', basicAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/api/admin/stats', basicAuth, (req, res) => {
+    res.json({
+        connections: io.engine.clientsCount,
+        uptime: process.uptime(),
+        memory: process.memoryUsage().rss
+    });
+});
+
+app.post('/api/admin/save', basicAuth, async (req, res) => {
+    console.log('Admin triggered force save.');
+    needsSave = true;
+    await saveBoard();
+    res.json({ success: true, message: 'Save triggered successfully.' });
+});
+
+app.post('/api/admin/clear', basicAuth, (req, res) => {
+    console.log('Admin triggered clear board.');
+    board.fill(255);
+    needsSave = true;
+    io.emit('init', board);
+    io.emit('chat', { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' });
+    res.json({ success: true, message: 'Board cleared.' });
+});
+
+// Persistence logic
 let needsSave = false;
 let isUploading = false;
 
@@ -125,6 +168,7 @@ const saveBoard = async () => {
         needsSave = false;
     }
 };
+
 
 // Save every 10 seconds
 setInterval(saveBoard, 10000);

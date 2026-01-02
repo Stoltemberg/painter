@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Board Admin</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #111;
+            --panel-bg: #1a1a1a;
+            --text-color: #eee;
+            --accent: #ef4444;
+            /* Red for admin */
+            --success: #4ade80;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        button.danger {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        button.danger:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        #log {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🛡️ Admin Dashboard</h1>
+
+        <div class="card">
+            <h2>Server Stats</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="onlineCount">-</div>
+                    <div class="stat-label">Online Users</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="uptime">-</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+            <br>
+            <button onclick="fetchStats()">🔄 Refresh Stats</button>
+        </div>
+
+        <div class="card">
+            <h2>Actions</h2>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button onclick="triggerSave()">💾 Force Save to Cloud</button>
+                <button class="danger" onclick="clearBoard()">☢️ CLEAR ENTIRE BOARD</button>
+            </div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        function log(msg) {
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logDiv.textContent;
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/admin/stats');
+                if (!res.ok) throw new Error(res.statusText);
+                const data = await res.json();
+                document.getElementById('onlineCount').textContent = data.connections;
+                document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                log('Stats updated.');
+            } catch (e) {
+                log('Error fetching stats: ' + e.message);
+            }
+        }
+
+        async function triggerSave() {
+            if (!confirm('Force save current state to Supabase?')) return;
+            try {
+                const res = await fetch('/api/admin/save', { method: 'POST' });
+                const data = await res.json();
+                log(data.message);
+            } catch (e) {
+                log('Error saving: ' + e.message);
+            }
+        }
+
+        async function clearBoard() {
+            const p = prompt('Type "CONFIRM" to wipe the board clean:');
+            if (p !== 'CONFIRM') return;
+
+            try {
+                const res = await fetch('/api/admin/clear', { method: 'POST' });
+                const data = await res.json();
+                log(data.message);
+            } catch (e) {
+                log('Error clearing: ' + e.message);
+            }
+        }
+
+        function formatUptime(sec) {
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            return `${h}h ${m}m`;
+        }
+
+        // Init
+        fetchStats();
+        setInterval(fetchStats, 5000);
+    </script>
+</body>
+
+</html>
