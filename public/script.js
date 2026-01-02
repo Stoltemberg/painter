@@ -1105,7 +1105,26 @@ async function initSupabase() {
         const res = await fetch('/api/config');
         const config = await res.json();
         if (config.supabaseUrl && config.supabaseKey) {
-            supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
+            // Check if loaded
+            if (typeof window.supabase === 'undefined') {
+                console.error('Supabase library not loaded. Check script tag.');
+                return;
+            }
+
+            // CDN usually exposes 'supabase.createClient' or just 'createClient' on the global if using a different build.
+            // But strict UMD '@supabase/supabase-js' exposes 'supabase' global with 'createClient' property.
+            try {
+                supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
+            } catch (err) {
+                console.warn('Standard init failed, trying fallback...');
+                // Sometimes it might be window.supabase.default.createClient depending on bundler
+                if (window.supabase.default && window.supabase.default.createClient) {
+                    supabase = window.supabase.default.createClient(config.supabaseUrl, config.supabaseKey);
+                } else {
+                    throw err;
+                }
+            }
+
             console.log('Supabase Client Initialized');
 
             // Check Session
@@ -1114,7 +1133,6 @@ async function initSupabase() {
                 handleUser(data.session.user);
             }
 
-            // Auth Listener
             // Auth Listener
             supabase.auth.onAuthStateChange((event, session) => {
                 console.log('Auth State Change:', event, session);

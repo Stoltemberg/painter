@@ -38,8 +38,26 @@ const chatHistory = [];
 const MAX_HISTORY = 20;
 
 // simple team scores
-const teamScores = { red: 0, blue: 0, green: 0 };
+let teamScores = { red: 0, blue: 0, green: 0 };
 const TEAMS = ['none', 'red', 'blue', 'green'];
+const TEAM_SCORES_FILE = path.join(__dirname, 'team_scores.json');
+
+// Load Team Scores
+try {
+    if (fs.existsSync(TEAM_SCORES_FILE)) {
+        const data = fs.readFileSync(TEAM_SCORES_FILE, 'utf8');
+        teamScores = JSON.parse(data);
+        console.log('Loaded Team Scores:', teamScores);
+    }
+} catch (e) {
+    console.warn('Failed to load team scores:', e);
+}
+
+function saveTeamScores() {
+    fs.writeFile(TEAM_SCORES_FILE, JSON.stringify(teamScores), (err) => {
+        if (err) console.error('Error saving team scores:', err);
+    });
+}
 
 // Leaderboard Persistence
 const dirtyScores = new Map(); // guestId -> { name, score, team }
@@ -629,10 +647,14 @@ io.on('connection', async (socket) => {
                 b.writeUInt8(tid, 7);
                 bufList.push(b);
 
-                if (TEAMS[tid]) teamScores[TEAMS[tid]]++;
+                if (TEAMS[tid]) {
+                    teamScores[TEAMS[tid]]++;
+                }
             }
             const finalBuf = Buffer.concat(bufList);
             socket.broadcast.emit('batch_pixels', finalBuf);
+
+            saveTeamScores(); // Save after batch update
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
