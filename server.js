@@ -42,16 +42,46 @@ let teamScores = { red: 0, blue: 0, green: 0 };
 const TEAMS = ['none', 'red', 'blue', 'green'];
 const TEAM_SCORES_FILE = path.join(__dirname, 'team_scores.json');
 
-// Load Team Scores
-try {
-    if (fs.existsSync(TEAM_SCORES_FILE)) {
-        const data = fs.readFileSync(TEAM_SCORES_FILE, 'utf8');
-        teamScores = JSON.parse(data);
-        console.log('Loaded Team Scores:', teamScores);
+
+// Load Team Scores (Async with Cloud Fallback)
+async function initTeamScores() {
+    let loaded = false;
+
+    // 1. Try Supabase
+    if (supabase) {
+        try {
+            const { data, error } = await supabase.storage
+                .from('pixel-board')
+                .download('team_scores.json');
+
+            if (data) {
+                const text = await data.text();
+                teamScores = JSON.parse(text);
+                console.log('Loaded Team Scores from Cloud:', teamScores);
+                // Save locally to sync
+                saveTeamScores();
+                loaded = true;
+            }
+        } catch (e) {
+            console.warn('Cloud team scores not found or error:', e.message);
+        }
     }
-} catch (e) {
-    console.warn('Failed to load team scores:', e);
+
+    // 2. Local Fallback
+    if (!loaded) {
+        try {
+            if (fs.existsSync(TEAM_SCORES_FILE)) {
+                const data = fs.readFileSync(TEAM_SCORES_FILE, 'utf8');
+                teamScores = JSON.parse(data);
+                console.log('Loaded Team Scores from Local:', teamScores);
+            }
+        } catch (e) {
+            console.warn('Failed to load local team scores:', e);
+        }
+    }
 }
+initTeamScores();
+
 
 function saveTeamScores() {
     fs.writeFile(TEAM_SCORES_FILE, JSON.stringify(teamScores), (err) => {
@@ -62,6 +92,7 @@ function saveTeamScores() {
 // Leaderboard Persistence
 const dirtyScores = new Map(); // guestId -> { name, score, team }
 let globalLeaderboard = [];
+let lastTeamScoreUpload = 0;
 
 async function syncScores() {
     if (!supabase) return;
@@ -87,8 +118,18 @@ async function syncScores() {
         io.emit('leaderboard', globalLeaderboard);
     }
 
-    // Also sync team scores if we wanted to persist them, but they are RAM only for now?
-    // Let's keep team scores in RAM or sync them too? Request didn't specify, focused on "top artists".
+    // 3. Persist Team Scores to Cloud (every 5s)
+    const now = Date.now();
+    if (now - lastTeamScoreUpload > 5000) {
+        lastTeamScoreUpload = now;
+        const { error } = await supabase.storage
+            .from('pixel-board')
+            .upload('team_scores.json', JSON.stringify(teamScores), {
+                contentType: 'application/json',
+                upsert: true
+            });
+        if (error) console.error('Team Score Cloud Save Error:', error.message);
+    }
 }
 
 // Sync Cache every 5s
