@@ -1177,23 +1177,11 @@ function handleUser(user) {
     if (supabase) {
         supabase.auth.getSession().then(({ data }) => {
             if (data.session) {
+                // Link auth token on session restore
                 socket.emit('auth', data.session.access_token);
             }
         });
     }
-}
-
-if (loginBtn) {
-    loginBtn.addEventListener('click', async () => {
-        if (loginBtn.textContent === 'Log Out') return;
-
-        const email = prompt('Enter your email to log in (Magic Link):');
-        if (email && supabase) {
-            const { error } = await supabase.auth.signInWithOtp({ email });
-            if (error) alert('Error: ' + error.message);
-            else alert('Check your email for the login link!');
-        }
-    });
 }
 
 socket.on('connect', () => {
