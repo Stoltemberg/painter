@@ -7,6 +7,7 @@ const io = require('socket.io')(http, {
 });
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { createClient } = require('@supabase/supabase-js');
 
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,7 @@ const BOARD_FILE = path.join(__dirname, 'board.dat');
 const BOARD_WIDTH = 3000;
 const BOARD_HEIGHT = 3000;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
+const CHUNK_LINES = 50; // Smaller chunks (~450KB) for stability
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -330,7 +332,7 @@ function updateInk(socket) {
     return state;
 }
 
-const zlib = require('zlib');
+// Chunking Configuration
 
 // Cache compressed board to save CPU/RAM on concurrent connects
 let cachedCompressedBoard = null;
@@ -450,13 +452,6 @@ io.on('connection', (socket) => {
         if (changed) {
             // Deduct Ink
             state.ink -= 1;
-            state.ink -= 1; // Why twice? Removing one.
-
-            // Wait, previous code had state.ink -= 1 twice by mistake?
-            // "state.ink -= 1; state.ink -= 1;" in the read file step 981 logic.
-            // I'll fix that too.
-            state.ink += 1; // Correcting previous double decrement logic locally here for cleaner code
-            // Actually, I'll just write clean code here.
 
             needsSave = true;
             socket.broadcast.emit('pixel', { x, y, r, g, b, size });
