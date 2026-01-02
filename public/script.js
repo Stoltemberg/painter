@@ -1530,6 +1530,35 @@ socket.on('leaderboard', (data) => {
     leaderboardDiv.innerHTML = html;
 });
 
+// V7: Team Leaderboard
+const teamLeaderboardDiv = document.getElementById('team-leaderboard');
+socket.on('team_scores', (scores) => {
+    if (!teamLeaderboardDiv) return;
+
+    // Check if empty (all zero)
+    if (!scores || (scores.red === 0 && scores.blue === 0 && scores.green === 0)) {
+        teamLeaderboardDiv.style.display = 'none';
+        return;
+    }
+
+    teamLeaderboardDiv.style.display = 'block';
+    teamLeaderboardDiv.innerHTML = `
+        <h3>⚔️ Team Battle</h3>
+        <div class="leaderboard-item" style="color:#ff4444">
+            <span>🔴 Red</span>
+            <span>${scores.red}px</span>
+        </div>
+        <div class="leaderboard-item" style="color:#4444ff">
+            <span>🔵 Blue</span>
+            <span>${scores.blue}px</span>
+        </div>
+        <div class="leaderboard-item" style="color:#44ff44">
+            <span>🟢 Green</span>
+            <span>${scores.green}px</span>
+        </div>
+    `;
+});
+
 // V5: Grid Toggle
 const gridBtn = document.getElementById('gridBtn');
 if (gridBtn) {
