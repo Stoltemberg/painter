@@ -332,9 +332,22 @@ function updateInk(socket) {
 
 const zlib = require('zlib');
 
-// Helper: Compress board for initial load
+// Cache compressed board to save CPU/RAM on concurrent connects
+let cachedCompressedBoard = null;
+let lastCompressionTime = 0;
+const COMPRESSION_TTL = 1000; // 1 second cache
+
 const getCompressedBoard = () => {
-    return zlib.gzipSync(board);
+    const now = Date.now();
+    // Use cache if fresh
+    if (cachedCompressedBoard && (now - lastCompressionTime < COMPRESSION_TTL)) {
+        return cachedCompressedBoard;
+    }
+
+    // Refresh cache
+    cachedCompressedBoard = zlib.gzipSync(board);
+    lastCompressionTime = now;
+    return cachedCompressedBoard;
 };
 
 io.on('connection', (socket) => {
@@ -345,6 +358,8 @@ io.on('connection', (socket) => {
     try {
         const compressed = getCompressedBoard();
         socket.emit('init', compressed);
+
+        // Explicitly clear var to hint GC? No, it's scoped.
     } catch (e) {
         console.error('Compression error:', e);
         socket.emit('init', board); // Fallback

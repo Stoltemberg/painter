@@ -847,14 +847,33 @@ socket.on('auth_success', (data) => {
 socket.on('init', (buffer) => {
     if (statusDiv) statusDiv.textContent = 'Decanting pixels...';
 
-    const uint8 = new Uint8Array(buffer);
+    let data = buffer;
+    // Attempt Decompression
+    if (typeof pako !== 'undefined') {
+        try {
+            // Check if it looks like GZIP (magic number 1f 8b) or just try
+            // Pako throws if invalid
+            data = pako.ungzip(new Uint8Array(buffer));
+            console.log('Decompressed board. Size:', data.length);
+        } catch (e) {
+            // console.log('Buffer incorrect or already raw', e);
+            data = new Uint8Array(buffer);
+        }
+    } else {
+        data = new Uint8Array(buffer);
+    }
+
+    // Prepare ImageData
     const imgData = bufferCtx.createImageData(boardSize, boardSize);
     const d = imgData.data;
 
-    for (let i = 0; i < boardSize * boardSize; i++) {
-        d[i * 4] = uint8[i * 3];
-        d[i * 4 + 1] = uint8[i * 3 + 1];
-        d[i * 4 + 2] = uint8[i * 3 + 2];
+    // Safety: ensure Loop doesn't exceed bounds
+    const len = Math.min(data.length / 3, boardSize * boardSize);
+
+    for (let i = 0; i < len; i++) {
+        d[i * 4] = data[i * 3];
+        d[i * 4 + 1] = data[i * 3 + 1];
+        d[i * 4 + 2] = data[i * 3 + 2];
         d[i * 4 + 3] = 255;
     }
 
