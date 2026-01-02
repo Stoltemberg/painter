@@ -8,6 +8,7 @@ const minimapCtx = minimapCanvas.getContext('2d');
 const minimapViewport = document.getElementById('minimap-viewport');
 const colorPicker = document.getElementById('colorPicker');
 const recentColorsDiv = document.getElementById('recentColors');
+const brushBtn = document.getElementById('brushBtn');
 const eraserBtn = document.getElementById('eraserBtn');
 const pipetteBtn = document.getElementById('pipetteBtn'); // New
 const exportBtn = document.getElementById('exportBtn');
@@ -17,12 +18,25 @@ const soundBtn = document.getElementById('soundBtn');
 // ... existing code ...
 
 // --- Button Listeners ---
+if (brushBtn) {
+    brushBtn.addEventListener('click', () => {
+        currentMode = 'brush';
+        canvas.style.cursor = 'crosshair';
+        brushBtn.style.border = '2px solid #4ade80';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
+    });
+}
+
 if (eraserBtn) {
     eraserBtn.addEventListener('click', () => {
         currentMode = 'eraser';
         canvas.style.cursor = 'cell';
         eraserBtn.style.border = '2px solid #4ade80';
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555'; // Reset fill too
     });
 }
 
@@ -31,7 +45,9 @@ if (pipetteBtn) {
         currentMode = 'pipette';
         canvas.style.cursor = 'copy';
         pipetteBtn.style.border = '2px solid #4ade80';
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
     });
 }
 
@@ -802,6 +818,7 @@ if (fillBtn) {
         currentMode = 'fill';
         canvas.style.cursor = 'alias';
         fillBtn.style.border = '2px solid #4ade80';
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
     });
