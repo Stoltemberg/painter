@@ -630,7 +630,20 @@ function drawPixel(x, y, r, g, b) {
 
 // --- Socket ---
 // Initialize Supabase & Auth
-let supabase = null;
+// --- Socket ---
+// Initialize Supabase & Auth
+// let supabase = null; // Already declared at top if moved, or use window.supabase
+// Actually, if it's declared once at line 633, where is the other?
+// I will just assign it if it exists or declare if not?
+// No, I'll just remove this line and rely on the one I hope exists or add it if missing.
+// Grep said 2 matches.
+// I will just use `supabase = null;` to be safe if it's already declared.
+// But wait, `let` throws.
+// I'll assume the one at line ~633 is the duplicate if I added one earlier.
+// Let's check the top of the file again. Step 945 shows lines 1-100. No supabase there.
+// Step 944 shows lines 600-650. Line 633 is `let supabase = null;`.
+// If grep found 2, maybe I pasted it twice in the same block?
+// I will remove this specific line.
 const loginBtn = document.getElementById('loginBtn');
 const inkValue = document.getElementById('inkValue');
 const inkFill = document.getElementById('inkFill');
