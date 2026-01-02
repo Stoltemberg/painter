@@ -32,6 +32,12 @@
                     </div>
                     <span id="inkValue" class="ink-text">250</span>
                 </div>
+                <select id="teamSelect" class="team-select" style="margin-right: 5px;">
+                    <option value="none">No Team</option>
+                    <option value="red">🔴 Team Red</option>
+                    <option value="blue">🔵 Team Blue</option>
+                    <option value="green">🟢 Team Green</option>
+                </select>
                 <button id="loginBtn" class="login-compact-btn">Log In</button>
             </div>
         </div>
@@ -48,7 +54,9 @@
                 <button id="brushBtn" title="Brush (Pencil)">✏️</button>
                 <button id="eraserBtn" title="Eraser">🧽</button>
                 <button id="pipetteBtn" title="Pipette (Pick Color)">🧪</button>
-                <button id="stampBtn" title="Stamp Tool (Coming Soon)">⭐</button>
+                <button id="fillBtn" title="Flood Fill (Limit 500px)">🌊</button>
+                <button id="lineBtn" title="Line Tool (Hold Shift)">📏</button>
+                <button id="stampBtn" title="Stamp Tool">⭐</button>
 
                 <div class="separator"></div>
 
@@ -62,7 +70,7 @@
                 <button id="exportBtn" title="Export Image">📸</button>
                 <button id="themeBtn" title="Toggle Theme">🌗</button>
                 <button id="soundBtn" title="Toggle Sound">🔊</button>
-                <button id="soundBtn" title="Toggle Sound">🔊</button>
+
             </div>
 
             <!-- Stamp Options (Hidden by default) -->
@@ -102,7 +110,7 @@
 
     <canvas id="board"></canvas>
 
-    <canvas id="board"></canvas>
+
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/socket.io/socket.io.js"></script>

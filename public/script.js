@@ -9,6 +9,55 @@ const socket = io({
     query: { guestId: guestUUID }
 });
 
+// --- IndexedDB Cache ---
+const DB_NAME = 'PixelBoardDB';
+const STORE_NAME = 'boardState';
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e);
+    });
+}
+
+async function loadCache() {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get('full_image');
+        return new Promise(resolve => {
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+    } catch (e) { console.warn('IDB Load Error', e); return null; }
+}
+
+async function saveCache(blob) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(blob, 'full_image');
+    } catch (e) { console.warn('IDB Save Error', e); }
+}
+
+// Attempt load on start
+loadCache().then(blob => {
+    if (blob) {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+            bufferCtx.drawImage(img, 0, 0);
+            draw();
+            updateMinimap();
+            if (statusDiv) statusDiv.textContent = 'Loaded from Cache (Syncing...)';
+        };
+    }
+});
+
 // DOM Elements
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for opaque
@@ -159,6 +208,22 @@ if (nicknameInput) {
     nicknameInput.addEventListener('change', () => {
         myNickname = nicknameInput.value.substring(0, 15) || 'Guest';
         localStorage.setItem('painter_nickname', myNickname);
+    });
+}
+
+// Teams
+const teamSelect = document.getElementById('teamSelect');
+let myTeam = localStorage.getItem('painter_team') || 0;
+const TEAM_IDS = { 'none': 0, 'red': 1, 'blue': 2, 'green': 3 };
+
+if (teamSelect) {
+    // Reverse map to set initial value
+    const rev = Object.keys(TEAM_IDS).find(k => TEAM_IDS[k] == myTeam) || 'none';
+    teamSelect.value = rev;
+
+    teamSelect.addEventListener('change', () => {
+        myTeam = TEAM_IDS[teamSelect.value] || 0;
+        localStorage.setItem('painter_team', myTeam);
     });
 }
 
@@ -422,6 +487,25 @@ function updateMinimapViewport() {
     minimapViewport.style.transform = `translate(${vpX}px, ${vpY}px)`;
 }
 
+// Minimap Click Teleport
+minimapCanvas.parentNode.addEventListener('mousedown', (e) => {
+    // Calculate click pos relative to minimap
+    const rect = minimapCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Convert to Percentage (0-1) then to World Coords
+    const px = Math.max(0, Math.min(1, mx / 150));
+    const py = Math.max(0, Math.min(1, my / 150));
+
+    // Update Offset to center on that spot
+    offsetX = (px * boardSize) - (canvas.width / 2) / scale;
+    offsetY = (py * boardSize) - (canvas.height / 2) / scale;
+
+    draw();
+    updateMinimapViewport();
+});
+
 // --- Interaction Math ---
 function screenToWorld(sx, sy) {
     const worldX = sx / scale + offsetX;
@@ -511,6 +595,7 @@ canvas.addEventListener('touchend', () => {
 
 
 // --- Mouse Events ---
+// --- Mouse Events ---
 canvas.addEventListener('mousedown', e => {
     // Resume audio context
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -526,14 +611,13 @@ canvas.addEventListener('mousedown', e => {
             const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
             setColor(hex);
             addRecentColor(hex);
-            // Quick visual feedback
             if (pipetteBtn) pipetteBtn.style.background = hex;
             setTimeout(() => { if (pipetteBtn) pipetteBtn.style.background = ''; }, 300);
         }
         return;
     }
 
-    // STAMP LOGIC (V6)
+    // STAMP LOGIC
     if (currentMode === 'stamp' && e.button === 0) {
         const { x, y } = screenToWorld(e.clientX, e.clientY);
         const shape = STAMPS[currentStamp] || STAMPS['heart'];
@@ -549,7 +633,7 @@ canvas.addEventListener('mousedown', e => {
             const px = x + pt.x;
             const py = y + pt.y;
             if (px >= 0 && px < boardSize && py >= 0 && py < boardSize) {
-                pixels.push({ x: px, y: py, r, g, b });
+                pixels.push({ x: px, y: py, r, g, b, t: myTeam });
                 drawPixel(px, py, r, g, b); // Optimistic
             }
         });
@@ -562,6 +646,63 @@ canvas.addEventListener('mousedown', e => {
         return;
     }
 
+    // FLOOD FILL LOGIC
+    if (currentMode === 'fill' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        const hex = colorPicker.value;
+        const targetR = parseInt(hex.slice(1, 3), 16);
+        const targetG = parseInt(hex.slice(3, 5), 16);
+        const targetB = parseInt(hex.slice(5, 7), 16);
+
+        // Get start color
+        const pixel = bufferCtx.getImageData(x, y, 1, 1).data;
+        const startR = pixel[0], startG = pixel[1], startB = pixel[2];
+
+        if (startR === targetR && startG === targetG && startB === targetB) return;
+
+        // BFS
+        const queue = [{ x, y }];
+        const visited = new Set();
+        const changes = [];
+        let cost = 0;
+
+        while (queue.length > 0 && cost < 500) { // Limit 500
+            const p = queue.shift();
+            const k = `${p.x},${p.y}`;
+            if (visited.has(k)) continue;
+            visited.add(k);
+
+            if (p.x < 0 || p.x >= boardSize || p.y < 0 || p.y >= boardSize) continue;
+
+            const px = bufferCtx.getImageData(p.x, p.y, 1, 1).data;
+            if (px[0] === startR && px[1] === startG && px[2] === startB) {
+                changes.push({ x: p.x, y: p.y, r: targetR, g: targetG, b: targetB, t: myTeam });
+                cost++;
+
+                queue.push({ x: p.x + 1, y: p.y });
+                queue.push({ x: p.x - 1, y: p.y });
+                queue.push({ x: p.x, y: p.y + 1 });
+                queue.push({ x: p.x, y: p.y - 1 });
+            }
+        }
+
+        if (changes.length > 0) {
+            socket.emit('batch_pixels', changes);
+            changes.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b));
+            playPop();
+        }
+        return;
+    }
+
+    // LINE TOOL LOGIC
+    if (currentMode === 'line' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        lineStart = { x, y };
+        isPainting = true; // Block dragging
+        return;
+    }
+
+    // DEFAULT BRUSH / DRAG
     if (e.button === 0) {
         isPainting = true;
         paint(e.clientX, e.clientY);
@@ -573,24 +714,46 @@ canvas.addEventListener('mousedown', e => {
     }
 });
 
-let lastCursorEmit = 0;
-let lastPaintEmit = 0;
+// Line Tool State
+let lineStart = null;
 
 canvas.addEventListener('mousemove', e => {
     const { x, y } = screenToWorld(e.clientX, e.clientY);
-    lastWorldPos = { x, y }; // Track for Key Reactions
+    lastWorldPos = { x, y };
     if (coordsDiv) coordsDiv.textContent = `X: ${x}, Y: ${y}`;
 
-    // Emit Cursor Position
+    // Emit Cursor
     const now = Date.now();
     if (now - lastCursorEmit > 50) {
         socket.emit('cursor', { x: x + 0.5, y: y + 0.5, name: myNickname });
         lastCursorEmit = now;
     }
 
-    if (isPainting) {
+    if (isPainting && currentMode === 'brush') {
         paint(e.clientX, e.clientY);
     }
+
+    // Line Preview
+    if (isPainting && currentMode === 'line' && lineStart) {
+        draw(); // Clear previous
+        // Draw line on ctx (screen space)
+        const screenStart = {
+            x: (lineStart.x - offsetX) * scale,
+            y: (lineStart.y - offsetY) * scale
+        };
+        const screenEnd = {
+            x: (x - offsetX) * scale,
+            y: (y - offsetY) * scale
+        };
+
+        ctx.beginPath();
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = scale;
+        ctx.moveTo(screenStart.x, screenStart.y);
+        ctx.lineTo(screenEnd.x, screenEnd.y);
+        ctx.stroke();
+    }
+
     if (isDragging) {
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
@@ -608,8 +771,48 @@ const endInput = () => {
     isDragging = false;
     canvas.style.cursor = currentMode === 'eraser' ? 'cell' : 'crosshair';
 };
-canvas.addEventListener('mouseup', endInput);
+
+canvas.addEventListener('mouseup', (e) => {
+    if (currentMode === 'line' && lineStart) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        // Commit Line
+        const points = getLinePoints(lineStart.x, lineStart.y, x, y);
+        // Simple pixel batch
+        const pixels = points.map(p => {
+            const hex = colorPicker.value;
+            return {
+                x: p.x, y: p.y,
+                r: parseInt(hex.slice(1, 3), 16),
+                g: parseInt(hex.slice(3, 5), 16),
+                b: parseInt(hex.slice(5, 7), 16),
+                t: myTeam
+            };
+        });
+        socket.emit('batch_pixels', pixels);
+        // Draw local
+        pixels.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b));
+        lineStart = null;
+    }
+    endInput();
+});
 canvas.addEventListener('mouseleave', endInput);
+
+function getLinePoints(x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = (x0 < x1) ? 1 : -1;
+    const sy = (y0 < y1) ? 1 : -1;
+    let err = dx - dy;
+    const points = [];
+    while (true) {
+        points.push({ x: x0, y: y0 });
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 < dx) { err += dx; y0 += sy; }
+    }
+    return points;
+}
 
 canvas.addEventListener('wheel', e => {
     e.preventDefault();
@@ -675,7 +878,7 @@ function paint(clientX, clientY) {
 
         drawPixel(x, y, r, g, b);
         playPop(); // Local sound
-        socket.emit('pixel', { x, y, r, g, b, size: 1 });
+        socket.emit('pixel', { x, y, r, g, b, size: 1, t: myTeam });
         lastPaintEmit = now;
 
         // Optimistic update
@@ -890,29 +1093,92 @@ socket.on('board_chunk', (chunk) => {
     if (chunk.progress >= 0.99) {
         if (statusDiv) statusDiv.textContent = 'Online';
         console.log('Board loading complete.');
+
+        // Save to Cache
+        bufferCanvas.toBlob((blob) => {
+            saveCache(blob);
+        });
     }
 });
 
 socket.on('pixel', (data) => {
-    drawPixel(data.x, data.y, data.r, data.g, data.b);
+    let x, y, r, g, b;
+    if (data instanceof ArrayBuffer) {
+        const dv = new DataView(data);
+        x = dv.getUint16(0, true);
+        y = dv.getUint16(2, true);
+        r = dv.getUint8(4);
+        g = dv.getUint8(5);
+        b = dv.getUint8(6);
+        // tid = dv.getUint8(7); 
+    } else {
+        ({ x, y, r, g, b } = data);
+    }
+    drawPixel(x, y, r, g, b);
     playPop(); // Remote sound
 });
 
 // V6: Batch Pixels (Stamps)
-socket.on('batch_pixels', (pixels) => {
-    pixels.forEach(p => {
-        // Draw directly to buffer without full redraw (optimization)
-        bufferCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
-        bufferCtx.fillRect(p.x, p.y, 1, 1);
+socket.on('batch_pixels', (data) => {
+    // Check if binary or JSON
+    if (data instanceof ArrayBuffer) {
+        const dv = new DataView(data);
+        const len = data.byteLength;
+        const count = len / 8;
+        for (let i = 0; i < count; i++) {
+            const off = i * 8;
+            const x = dv.getUint16(off, true);
+            const y = dv.getUint16(off + 2, true);
+            const r = dv.getUint8(off + 4);
+            const g = dv.getUint8(off + 5);
+            const b = dv.getUint8(off + 6);
 
-        // Minimap
-        minimapCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
-        const mx = Math.floor(p.x / boardSize * 150);
-        const my = Math.floor(p.y / boardSize * 150);
-        minimapCtx.fillRect(mx, my, 1, 1);
-    });
+            bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
+            bufferCtx.fillRect(x, y, 1, 1);
+
+            // Minimal map update? Optimization: skip here, update minimap once at end?
+            // Actually, we need to update local Minimap too.
+            minimapCtx.fillStyle = `rgb(${r},${g},${b})`;
+            const mx = Math.floor(x / boardSize * 150);
+            const my = Math.floor(y / boardSize * 150);
+            minimapCtx.fillRect(mx, my, 1, 1);
+        }
+    } else {
+        // Legacy JSON
+        data.forEach(p => {
+            bufferCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+            bufferCtx.fillRect(p.x, p.y, 1, 1);
+
+            minimapCtx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+            const mx = Math.floor(p.x / boardSize * 150);
+            const my = Math.floor(p.y / boardSize * 150);
+            minimapCtx.fillRect(mx, my, 1, 1);
+        });
+    }
     draw(); // Redraw once at end
     playPop();
+});
+
+socket.on('team_scores', (scores) => {
+    const lb = document.getElementById('leaderboard');
+    if (lb) {
+        let html = lb.innerHTML;
+        if (!html.includes('Team Red')) {
+            html += '<div style="margin-top:10px; border-top:1px solid #444; padding-top:5px;">';
+            html += `<div style="color:#f87171">🔴 Red: <span id="score-red">${scores.red}</span></div>`;
+            html += `<div style="color:#60a5fa">🔵 Blue: <span id="score-blue">${scores.blue}</span></div>`;
+            html += `<div style="color:#4ade80">🟢 Green: <span id="score-green">${scores.green}</span></div>`;
+            html += '</div>';
+            lb.innerHTML = html;
+        } else {
+            const rr = document.getElementById('score-red');
+            const bb = document.getElementById('score-blue');
+            const gg = document.getElementById('score-green');
+            if (rr) rr.textContent = scores.red;
+            if (bb) bb.textContent = scores.blue;
+            if (gg) gg.textContent = scores.green;
+        }
+    }
 });
 
 // V6: Reactions (Emotes)

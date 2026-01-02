@@ -37,6 +37,10 @@ board.fill(255); // White
 const chatHistory = [];
 const MAX_HISTORY = 20;
 
+// simple team scores
+const teamScores = { red: 0, blue: 0, green: 0 };
+const TEAMS = ['none', 'red', 'blue', 'green'];
+
 // Load board logic
 const initBoard = async () => {
     let loadedFromCloud = false;
@@ -284,6 +288,7 @@ function broadcastLeaderboard() {
     // Top 5
     const top5 = clients.slice(0, 5);
     io.emit('leaderboard', top5);
+    io.emit('team_scores', teamScores);
 }
 
 // V7: Ink / Energy System
@@ -454,7 +459,18 @@ io.on('connection', (socket) => {
             state.ink -= 1;
 
             needsSave = true;
-            socket.broadcast.emit('pixel', { x, y, r, g, b, size });
+            // Binary Packet: [X(2), Y(2), R(1), G(1), B(1), Team(1)]
+            const tid = data.t || 0;
+            const bBuf = Buffer.alloc(8);
+            bBuf.writeUInt16LE(x, 0);
+            bBuf.writeUInt16LE(y, 2);
+            bBuf.writeUInt8(r, 4);
+            bBuf.writeUInt8(g, 5);
+            bBuf.writeUInt8(b, 6);
+            bBuf.writeUInt8(tid, 7);
+
+            socket.broadcast.emit('pixel', bBuf);
+            if (TEAMS[tid]) teamScores[TEAMS[tid]]++;
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
@@ -503,7 +519,23 @@ io.on('connection', (socket) => {
         if (changed) {
             state.ink -= pixelCount; // Accurate deduction
             needsSave = true;
-            socket.broadcast.emit('batch_pixels', pixels);
+            // Binary Batch: Sequence of [X(2), Y(2), R(1), G(1), B(1), Team(1)]
+            const bufList = [];
+            for (const p of pixels) {
+                const tid = p.t || 0;
+                const b = Buffer.alloc(8);
+                b.writeUInt16LE(p.x, 0);
+                b.writeUInt16LE(p.y, 2);
+                b.writeUInt8(p.r, 4);
+                b.writeUInt8(p.g, 5);
+                b.writeUInt8(p.b, 6);
+                b.writeUInt8(tid, 7);
+                bufList.push(b);
+
+                if (TEAMS[tid]) teamScores[TEAMS[tid]]++;
+            }
+            const finalBuf = Buffer.concat(bufList);
+            socket.broadcast.emit('batch_pixels', finalBuf);
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
