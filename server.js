@@ -3,7 +3,12 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
-    maxHttpBufferSize: 2e8 // 200 MB to handle large board init
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    },
+    maxHttpBufferSize: 5e7, // 50MB (Allow large init payload)
+    pingTimeout: 60000 // Increase timeout for slow connections
 });
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +20,7 @@ const BOARD_FILE = path.join(__dirname, 'board.dat');
 const BOARD_WIDTH = 3000;
 const BOARD_HEIGHT = 3000;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
-const CHUNK_LINES = 100; // Optimized: Faster loading (was 10) // Smaller chunks (~450KB) for stability
+const CHUNK_LINES = 50; // Smaller chunks (~450KB) for stability
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL;
