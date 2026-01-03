@@ -1058,15 +1058,35 @@ canvas.addEventListener('mousedown', e => {
 
     // PIPETTE LOGIC
     if (currentMode === 'pipette' && e.button === 0) {
-        const { x, y } = screenToWorld(e.clientX, e.clientY);
-        if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
-            const pixel = bufferCtx.getImageData(x, y, 1, 1).data;
-            const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
-            setColor(hex);
-            addRecentColor(hex);
-            if (pipetteBtn) pipetteBtn.style.background = hex;
-            setTimeout(() => { if (pipetteBtn) pipetteBtn.style.background = ''; }, 300);
+        // Pick what is visible on screen (including overlays)
+        const rect = canvas.getBoundingClientRect();
+        const mx = Math.floor(e.clientX - rect.left);
+        const my = Math.floor(e.clientY - rect.top);
+
+        const pixel = ctx.getImageData(mx, my, 1, 1).data;
+        // pixel is [r, g, b, a]
+        // Ensure accurate hex conversion
+        const r = pixel[0];
+        const g = pixel[1];
+        const b = pixel[2];
+        const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+
+        setColor(hex);
+        addRecentColor(hex);
+
+        // Visual feedback
+        if (pipetteBtn) {
+            pipetteBtn.style.background = hex;
+            // Determine text color based on brightness
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            pipetteBtn.style.color = brightness > 125 ? '#000' : '#fff';
         }
+        setTimeout(() => {
+            if (pipetteBtn) {
+                pipetteBtn.style.background = '';
+                pipetteBtn.style.color = '';
+            }
+        }, 300);
         return;
     }
 
