@@ -15,7 +15,7 @@ const BOARD_FILE = path.join(__dirname, 'board.dat');
 const BOARD_WIDTH = 3000;
 const BOARD_HEIGHT = 3000;
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
-const CHUNK_LINES = 50; // Smaller chunks (~450KB) for stability
+const CHUNK_LINES = 100; // Optimized: Faster loading (was 10) // Smaller chunks (~450KB) for stability
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -390,8 +390,8 @@ const saveBoard = async () => {
 };
 
 
-// Save every 10 seconds
-setInterval(saveBoard, 10000);
+// Save every 60 seconds
+setInterval(saveBoard, 60000);
 
 // Fallback RAM Leaderboard (no persistence)
 function broadcastLeaderboardLegacy() {

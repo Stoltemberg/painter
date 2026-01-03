@@ -1399,6 +1399,31 @@ socket.on('batch_pixels', (data) => {
     playPop();
 });
 
+socket.on('init', (data) => {
+    // If data is buffer/arraybuffer
+    if (data instanceof ArrayBuffer) {
+        const uint8 = new Uint8Array(data);
+        const len = uint8.length / 3;
+        const clamped = new Uint8ClampedArray(len * 4);
+        for (let i = 0; i < len; i++) {
+            clamped[i * 4] = uint8[i * 3];
+            clamped[i * 4 + 1] = uint8[i * 3 + 1];
+            clamped[i * 4 + 2] = uint8[i * 3 + 2];
+            clamped[i * 4 + 3] = 255;
+        }
+        const imgData = new ImageData(clamped, boardSize, boardSize);
+        bufferCtx.putImageData(imgData, 0, 0);
+    } else {
+        // Assume it's the raw buffer if websocket handles it, or handle legacy
+        // But likely it comes as ArrayBuffer in creating From Buffer on server
+        // server.js: const board = Buffer.alloc(...)
+        // socket.emit('init', board) -> sends Buffer -> client receives ArrayBuffer
+    }
+    needsRedraw = true;
+    updateMinimap();
+    if (statusDiv) statusDiv.textContent = 'Online';
+});
+
 
 
 // V6: Reactions (Emotes)
