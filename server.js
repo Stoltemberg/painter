@@ -360,18 +360,69 @@ app.post('/api/admin/clear', basicAuth, (req, res) => {
 // Persistence logic
 let needsSave = false;
 let isUploading = false;
+let strokeBuffer = [];
+const STROKE_BATCH_LIMIT = 50; // Max strokes before auto-flush
+const FLUSH_INTERVAL = 5000; // 5 seconds
 
+// Helper: Flush buffered strokes to Supabase
+async function flushStrokes() {
+    if (strokeBuffer.length === 0 || !supabase) return;
+
+    const batch = [...strokeBuffer];
+    strokeBuffer = []; // Clear buffer immediately
+
+    // Map to DB structure
+    const rows = batch.map(s => ({
+        x: s.x,
+        y: s.y,
+        color: s.color, // Expecting hex string or similar
+        team: s.team,
+        session_id: s.sessionId // We need to resolve this from guestId later
+    }));
+
+    // For now, we might not have session_id linked correctly if we don't look it up.
+    // Simplifying: We will try to just insert basic data. 
+    // If session_id is missing, we might need to adjust the schema or lookup logic.
+    // For this step, let's just log if we can't insert.
+
+    // Optimistic insert structure (assuming session mapping exists or nullable)
+    // IMPORTANT: In the SQL schema we made session_id reference sessions(id).
+    // We need to ensure we have a session ID. For now, we will skip session_id 
+    // if we haven't implemented the session handshake yet, OR we update the logic 
+    // to find/create session on connection.
+
+    // To avoid FK errors right now without changing connection logic, 
+    // we will only insert if we have a valid session UUID. 
+    // If not, we skip the history log for that stroke (it still paints on board).
+
+    const validRows = rows.filter(r => r.session_id);
+
+    if (validRows.length > 0) {
+        const { error } = await supabase.from('strokes').insert(validRows);
+        if (error) console.error('Error flushing strokes:', error.message);
+    }
+}
+
+// Flush interval
+setInterval(flushStrokes, FLUSH_INTERVAL);
+
+// Snapshot Logic (Lazy Cloud Save)
 const saveBoard = async () => {
-    if (needsSave) {
-        // 1. Save locally
+    // Only save if dirty AND not currently uploading
+    if (needsSave && !isUploading) {
+        // 1. Save locally (Cache only - keep for quick restart)
+        // We can skip this if disk IO is a concern, but it's good for crash recovery.
+        // On Render Free Tier, we'll skip frequent local writes to save IOPS/CPU.
+        /* 
         fs.writeFile(BOARD_FILE, board, (err) => {
-            if (err) console.error('Error saving local board:', err);
-        });
+             if (err) console.error('Error saving local board:', err);
+        }); 
+        */
 
-        // 2. Upload to Supabase (if configured)
-        if (supabase && !isUploading) {
+        // 2. Upload to Supabase (Source of Truth)
+        if (supabase) {
             isUploading = true;
-            console.log('Uploading board to Supabase...');
+            console.log('Uploading board snapshot to Supabase...');
 
             const { error } = await supabase
                 .storage
@@ -385,18 +436,16 @@ const saveBoard = async () => {
                 console.error('Supabase upload error:', error.message);
             } else {
                 console.log('Supabase upload success.');
+                needsSave = false; // logic: only mark clean if cloud accepted it
             }
 
             isUploading = false;
         }
-
-        needsSave = false;
     }
 };
 
-
-// Save every 60 seconds
-setInterval(saveBoard, 60000);
+// Save Snapshot every 2 minutes (Lazy) - Less CPU usage
+setInterval(saveBoard, 120000);
 
 // Fallback RAM Leaderboard (no persistence)
 function broadcastLeaderboardLegacy() {
@@ -489,8 +538,36 @@ io.on('connection', async (socket) => {
     const guestId = socket.handshake.query.guestId;
     socket.guestId = guestId;
     socket.pixelScore = 0;
+    socket.dbSessionId = null; // Store database UUID for this session
 
+    // --- Session Management (Supabase) ---
     if (supabase && guestId) {
+        // 1. Try to find existing session for this guest UUID
+        const { data: sessionData, error: sessionError } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('guest_uuid', guestId)
+            .single();
+
+        if (sessionData) {
+            socket.dbSessionId = sessionData.id;
+            // Async update last_seen
+            supabase.from('sessions').update({ last_seen: new Date() }).eq('id', socket.dbSessionId).then();
+        } else {
+            // Create new session
+            const { data: newSession, error: createError } = await supabase
+                .from('sessions')
+                .insert({ guest_uuid: guestId })
+                .select('id')
+                .single();
+
+            if (newSession) {
+                socket.dbSessionId = newSession.id;
+                console.log('New Session Created:', socket.dbSessionId);
+            }
+        }
+
+        // Load Score
         const { data } = await supabase
             .from('leaderboard')
             .select('score')
@@ -621,6 +698,22 @@ io.on('connection', async (socket) => {
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
 
+            // --- Push to History Buffer ---
+            if (socket.dbSessionId) {
+                // Convert RGB back to hex for DB
+                const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                strokeBuffer.push({
+                    x, y, color: hex,
+                    team: TEAMS[tid],
+                    sessionId: socket.dbSessionId
+                });
+
+                // Safety: Auto flush if too big
+                if (strokeBuffer.length >= STROKE_BATCH_LIMIT) {
+                    flushStrokes();
+                }
+            }
+
             // Queue for Sync
             if (supabase && socket.guestId) {
                 dirtyScores.set(socket.guestId, {
@@ -702,6 +795,20 @@ io.on('connection', async (socket) => {
                 if (TEAMS[tid]) {
                     teamScores[TEAMS[tid]]++;
                 }
+
+                // --- History Buffer for Batch ---
+                if (socket.dbSessionId) {
+                    const hex = "#" + ((1 << 24) + (p.r << 16) + (p.g << 8) + p.b).toString(16).slice(1);
+                    strokeBuffer.push({
+                        x: p.x, y: p.y, color: hex,
+                        team: TEAMS[tid],
+                        sessionId: socket.dbSessionId
+                    });
+                }
+            }
+            // Auto flush if too big after batch
+            if (strokeBuffer.length >= STROKE_BATCH_LIMIT) {
+                flushStrokes();
             }
             const finalBuf = Buffer.concat(bufList);
             socket.broadcast.emit('batch_pixels', finalBuf);
