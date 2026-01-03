@@ -1142,18 +1142,16 @@ async function initSupabase() {
             try {
                 if (window.supabase && typeof window.supabase.createClient === 'function') {
                     supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-                } else if (window.supabase && window.supabase.default && typeof window.supabase.default.createClient === 'function') {
-                    supabase = window.supabase.default.createClient(config.supabaseUrl, config.supabaseKey);
-                } else if (typeof window.Supabase !== 'undefined' && typeof window.Supabase.createClient === 'function') {
+                } else if (window.Supabase && typeof window.Supabase.createClient === 'function') {
                     supabase = window.Supabase.createClient(config.supabaseUrl, config.supabaseKey);
-                } else if (typeof window.createClient === 'function') {
-                    supabase = window.createClient(config.supabaseUrl, config.supabaseKey);
                 } else {
-                    throw new Error('Could not find createClient. Check console for window.supabase structure.');
+                    // Fallback: If not found, just warn and continue.
+                    console.warn('Supabase createClient not found. Auth will be disabled.');
+                    return;
                 }
             } catch (err) {
-                console.error('Failed to find createClient:', err);
-                return;
+                console.warn('Supabase Init Error:', err);
+                return; // Continue app even if auth fails
             }
 
             console.log('Supabase Client Initialized');
