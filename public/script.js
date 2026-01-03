@@ -850,6 +850,38 @@ socket.on('update_overlays', (overlays) => {
     needsRedraw = true;
 });
 
+
+// Helper: Hit Test
+function getHitOverlay(wx, wy) {
+    // Reverse iterate to pick top-most
+    for (let i = activeOverlays.length - 1; i >= 0; i--) {
+        const ov = activeOverlays[i];
+        if (!ov.img) continue;
+        const w = ov.img.width * ov.scale;
+        const h = ov.img.height * ov.scale;
+
+        // Handle Hit (Bottom Right) - slightly larger area
+        const handleSize = 20 / scale; // Screen tolerance
+        if (wx >= ov.x + w - handleSize && wx <= ov.x + w + handleSize &&
+            wy >= ov.y + h - handleSize && wy <= ov.y + h + handleSize) {
+            return { id: ov.id, type: 'handle' };
+        }
+
+        // Body Hit
+        if (wx >= ov.x && wx <= ov.x + w && wy >= ov.y && wy <= ov.y + h) {
+            return { id: ov.id, type: 'body' };
+        }
+    }
+    return null;
+}
+
+// State for Interaction
+let selectedOverlayId = null;
+let isDraggingOverlay = false;
+let isResizingOverlay = false;
+let overlayDragStart = { x: 0, y: 0 }; // World Coords
+let overlayInitialPos = { x: 0, y: 0, w: 0, h: 0, scale: 1 };
+
 function drawGrid(ctx, vx, vy, vw, vh) {
     ctx.beginPath();
     ctx.lineWidth = 0.5 / scale;
