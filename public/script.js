@@ -658,22 +658,37 @@ resize();
 function clampView() {
     if (!isRestrictedView) return;
 
-    // 1. Zoom Restriction: Must fit board
-    const minScale = Math.max(canvas.width / boardSize, canvas.height / boardSize);
-    if (scale < minScale) scale = minScale;
-
-    // 2. Pan Restriction: Keep viewport inside board
     const visibleW = canvas.width / scale;
     const visibleH = canvas.height / scale;
 
-    const maxOffsetX = boardSize - visibleW;
-    const maxOffsetY = boardSize - visibleH;
+    // Zoom Restriction: If board fits entirely, force it to fit?
+    // Actually, let's allow zooming out a bit if we want, but usually 'Restricted' means 'Fill Screen'
+    // The previous logic forced minScale. We can keep that.
+    const minScale = Math.max(canvas.width / boardSize, canvas.height / boardSize);
+    if (scale < minScale) scale = minScale;
 
-    // Apply clamp
-    if (offsetX < 0) offsetX = 0;
-    if (offsetY < 0) offsetY = 0;
-    if (offsetX > maxOffsetX) offsetX = maxOffsetX;
-    if (offsetY > maxOffsetY) offsetY = maxOffsetY;
+    // Pan Restriction (Center-based Offset)
+    // We want the viewport edges to not go outside the board (0..boardSize)
+    const halfW = visibleW / 2;
+    const halfH = visibleH / 2;
+
+    if (visibleW > boardSize) {
+        offsetX = boardSize / 2;
+    } else {
+        const minX = halfW;
+        const maxX = boardSize - halfW;
+        if (offsetX < minX) offsetX = minX;
+        if (offsetX > maxX) offsetX = maxX;
+    }
+
+    if (visibleH > boardSize) {
+        offsetY = boardSize / 2;
+    } else {
+        const minY = halfH;
+        const maxY = boardSize - halfH;
+        if (offsetY < minY) offsetY = minY;
+        if (offsetY > maxY) offsetY = maxY;
+    }
 }
 
 // --- Rendering (Optimized Loop) ---
