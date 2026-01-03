@@ -842,8 +842,18 @@ socket.on('update_overlays', (overlays) => {
     // Add new
     newMap.forEach((val, key) => {
         const img = new Image();
+        img.crossOrigin = 'Anonymous'; // Try to satisfy browser security
         img.src = val.url;
-        img.onload = () => needsRedraw = true;
+
+        img.onload = () => {
+            console.log(`Overlay loaded: ${val.id} (${img.naturalWidth}x${img.naturalHeight})`);
+            needsRedraw = true;
+        };
+
+        img.onerror = (e) => {
+            console.error(`Failed to load overlay image: ${val.url}`, e);
+        };
+
         activeOverlays.push({ ...val, img });
     });
 
