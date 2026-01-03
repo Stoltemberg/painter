@@ -215,6 +215,8 @@ const uiLayer = document.getElementById('ui-layer');
 
 // State
 let boardSize = 3000;
+bufferCanvas.width = boardSize;
+bufferCanvas.height = boardSize;
 let scale = 0.5;
 let offsetX = boardSize / 2 - window.innerWidth / 2;
 let offsetY = boardSize / 2 - window.innerHeight / 2;
