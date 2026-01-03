@@ -51,6 +51,8 @@ async function saveCache(blob) {
 // DOM Elements
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for opaque
+const bufferCanvas = document.createElement('canvas');
+const bufferCtx = bufferCanvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 const minimapViewport = document.getElementById('minimap-viewport');
@@ -339,10 +341,7 @@ const audioCtx = new AudioContext();
 const cursors = {}; // id -> element
 
 // Offscreen buffer
-const bufferCanvas = document.createElement('canvas');
-const bufferCtx = bufferCanvas.getContext('2d', { alpha: false });
-bufferCanvas.width = boardSize;
-bufferCanvas.height = boardSize;
+// Offscreen buffer logic
 bufferCtx.fillStyle = '#ffffff';
 bufferCtx.fillRect(0, 0, boardSize, boardSize);
 
@@ -554,14 +553,23 @@ function clampView() {
 }
 
 // --- Rendering (Optimized Loop) ---
-// --- Rendering (Optimized Loop) ---
-function renderLoop() {
+// --- Rendering// Revert to robust Interval Loop (simpler than rAF for debugging)
+// This ensures that if any logic sets needsRedraw, it WILL draw per 33ms.
+// No risk of loop stalling.
+setInterval(() => {
     if (needsRedraw) {
         draw();
         needsRedraw = false;
     }
-    requestAnimationFrame(renderLoop);
-}
+}, 33);
+
+// Explicit draw on startup
+setTimeout(draw, 500);
+setTimeout(draw, 1000);
+
+// Init App
+initSupabase();
+initApp();
 
 function draw() {
     // Clear Screen
@@ -951,6 +959,7 @@ canvas.addEventListener('mousemove', e => {
         lastX = e.clientX;
         lastY = e.clientY;
         needsRedraw = true;
+        draw(); // Force direct draw for feedback
         updateMinimapViewport();
     }
 });
