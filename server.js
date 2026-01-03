@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
@@ -36,6 +37,12 @@ board.fill(255); // White
 // Chat History
 const chatHistory = [];
 const MAX_HISTORY = 20;
+
+// Chat Rate Limit
+const chatRateLimit = new Map(); // socketId -> lastTime
+const CHAT_COOLDOWN = 1000; // 1 second
+const MAX_MSG_LENGTH = 100;
+
 
 // simple team scores
 let teamScores = { red: 0, blue: 0, green: 0 };
@@ -249,6 +256,7 @@ const initBoard = async () => {
 // Run init
 initBoard();
 
+app.use(compression());
 app.use(express.static('public'));
 
 // --- Middleware: Simple Basic Auth ---
@@ -767,7 +775,16 @@ io.on('connection', async (socket) => {
 
     socket.on('chat', (msg) => {
         if (msg && msg.text) {
-            const text = msg.text.substring(0, 100);
+            // Rate Limit Check
+            const lastChat = chatRateLimit.get(socket.id) || 0;
+            const now = Date.now();
+            if (now - lastChat < CHAT_COOLDOWN) {
+                // Rate limited (silently ignore or warn)
+                return;
+            }
+            chatRateLimit.set(socket.id, now);
+
+            const text = msg.text.substring(0, MAX_MSG_LENGTH);
 
             // ADMIN TOOLS (Secret Command)
             if (text.startsWith('/clear admin123')) {

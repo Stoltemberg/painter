@@ -228,6 +228,8 @@ let soundEnabled = true;
 let myNickname = localStorage.getItem('painter_nickname') || 'Guest';
 let showGridOverride = false;
 let hoverPos = null;
+let needsRedraw = true; // Optimization: Render Loop Flag
+
 
 // UI Setup
 // Auth DOM Elements
@@ -395,7 +397,7 @@ if (viewModeBtn) {
         viewModeBtn.title = isRestrictedView ? 'Restricted View (Locked)' : 'Infinite View (Unlocked)';
         if (isRestrictedView) {
             clampView();
-            draw();
+            needsRedraw = true;
             updateMinimapViewport();
         }
     });
@@ -409,7 +411,7 @@ if (teleBtn) {
         // Center view on X, Y
         offsetX = x - (canvas.width / 2) / scale;
         offsetY = y - (canvas.height / 2) / scale;
-        draw();
+        needsRedraw = true;
         updateMinimapViewport();
     });
 }
@@ -519,14 +521,14 @@ updateRecentColorsUI();
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    draw();
+    needsRedraw = true;
     updateMinimapViewport();
 }
 window.addEventListener('resize', resize);
 resize();
 
-window.addEventListener('resize', resize);
-resize();
+// removed duplicate window.addEventListener('resize', resize);
+
 
 function clampView() {
     if (!isRestrictedView) return;
@@ -549,7 +551,16 @@ function clampView() {
     if (offsetY > maxOffsetY) offsetY = maxOffsetY;
 }
 
-// --- Rendering ---
+// --- Rendering (Optimized Loop) ---
+function renderLoop() {
+    if (needsRedraw) {
+        needsRedraw = true;
+        needsRedraw = false;
+    }
+    requestAnimationFrame(renderLoop);
+}
+requestAnimationFrame(renderLoop);
+
 function draw() {
     ctx.fillStyle = '#111';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -557,6 +568,7 @@ function draw() {
     ctx.save();
     ctx.translate(-offsetX * scale, -offsetY * scale);
     ctx.scale(scale, scale);
+    // ... rest of draw ...
 
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bufferCanvas, 0, 0);
@@ -660,7 +672,7 @@ minimapCanvas.parentNode.addEventListener('mousedown', (e) => {
     offsetX = (px * boardSize) - (canvas.width / 2) / scale;
     offsetY = (py * boardSize) - (canvas.height / 2) / scale;
 
-    draw();
+    needsRedraw = true;
     updateMinimapViewport();
 });
 
@@ -748,7 +760,7 @@ canvas.addEventListener('touchmove', e => {
         lastX = cx;
         lastY = cy;
 
-        draw();
+        needsRedraw = true;
         updateMinimapViewport();
     }
 }, { passive: false });
@@ -898,7 +910,7 @@ canvas.addEventListener('mousemove', e => {
 
     // Ghost Cursor Update
     hoverPos = { x, y };
-    if (!isDragging && !isPainting) draw(); // Redraw for ghost cursor
+    if (!isDragging && !isPainting) needsRedraw = true; // Redraw for ghost cursor
 
 
     if (isPainting && currentMode === 'brush') {
@@ -907,7 +919,7 @@ canvas.addEventListener('mousemove', e => {
 
     // Line Preview
     if (isPainting && currentMode === 'line' && lineStart) {
-        draw(); // Clear previous
+        needsRedraw = true; // Clear previous
         // Draw line on ctx (screen space)
         const screenStart = {
             x: (lineStart.x - offsetX) * scale,
@@ -934,7 +946,7 @@ canvas.addEventListener('mousemove', e => {
         clampView();
         lastX = e.clientX;
         lastY = e.clientY;
-        draw();
+        needsRedraw = true;
         updateMinimapViewport();
     }
 });
@@ -1008,7 +1020,7 @@ canvas.addEventListener('wheel', e => {
     offsetY = wy - my / scale;
     clampView();
 
-    draw();
+    needsRedraw = true;
     updateMinimapViewport();
 }, { passive: false });
 
@@ -1019,7 +1031,7 @@ if (resetBtn) {
         scale = 0.5;
         offsetX = boardSize / 2 - window.innerWidth / 2;
         offsetY = boardSize / 2 - window.innerHeight / 2;
-        draw();
+        needsRedraw = true;
         updateMinimapViewport();
     });
 }
@@ -1065,7 +1077,7 @@ function paint(clientX, clientY) {
 function drawPixel(x, y, r, g, b, isLocal = false) {
     bufferCtx.fillStyle = `rgb(${r},${g},${b})`;
     bufferCtx.fillRect(x, y, 1, 1);
-    draw();
+    needsRedraw = true;
 
     minimapCtx.fillStyle = `rgb(${r},${g},${b})`;
     const mx = Math.floor(x / boardSize * 150);
@@ -1289,7 +1301,7 @@ socket.on('board_chunk', (chunk) => {
 
     // Optimistic: Only redraw full canvas at 100%? Or every chunk?
     // Every chunk is fun to watch loading.
-    draw();
+    needsRedraw = true;
 
     // Update minimap for this chunk (expensive? maybe just once at end?)
     // Let's do it every 10%
@@ -1383,7 +1395,7 @@ socket.on('batch_pixels', (data) => {
             minimapCtx.fillRect(mx, my, 1, 1);
         });
     }
-    draw(); // Redraw once at end
+    needsRedraw = true; // Redraw once at end
     playPop();
 });
 
@@ -1528,7 +1540,7 @@ minimapCanvas.addEventListener('mousedown', e => {
     offsetX = wx - (canvas.width / 2) / scale;
     offsetY = wy - (canvas.height / 2) / scale;
 
-    draw();
+    needsRedraw = true;
     updateMinimapViewport();
 });
 
@@ -1616,7 +1628,7 @@ if (gridBtn) {
     gridBtn.addEventListener('click', () => {
         showGridOverride = !showGridOverride;
         gridBtn.style.border = showGridOverride ? '2px solid #4ade80' : '1px solid #555';
-        draw(); // Redraw immediately
+        needsRedraw = true; // Redraw immediately
     });
 }
 
@@ -1659,7 +1671,7 @@ async function initApp() {
         img.src = URL.createObjectURL(blob);
         img.onload = () => {
             bufferCtx.drawImage(img, 0, 0);
-            draw();
+            needsRedraw = true;
             updateMinimap();
             if (statusDiv) statusDiv.textContent = 'Loaded from Cache';
         };

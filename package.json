@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
+    "compression": "^1.7.4",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
