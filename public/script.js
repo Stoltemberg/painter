@@ -350,6 +350,7 @@ let isPainting = false;
 let lastX = 0;
 let lastY = 0;
 let currentMode = 'brush';
+let overlayOpacity = 0.65; // Fixed Opacity
 let recentColors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
 let soundEnabled = true;
 let myNickname = localStorage.getItem('painter_nickname') || 'Guest';
