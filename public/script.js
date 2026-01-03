@@ -1142,12 +1142,22 @@ async function initSupabase() {
 
             // Init Client
             try {
-                if (window.supabase?.createClient) {
-                    supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-                } else if (window.Supabase?.createClient) {
-                    supabase = window.Supabase.createClient(config.supabaseUrl, config.supabaseKey);
+                let factory = null;
+                if (window.supabase?.createClient) factory = window.supabase;
+                else if (window.supabase?.default?.createClient) factory = window.supabase.default;
+                else if (window.Supabase?.createClient) factory = window.Supabase;
+                else if (window.Supabase?.default?.createClient) factory = window.Supabase.default;
+
+                if (factory) {
+                    supabase = factory.createClient(config.supabaseUrl, config.supabaseKey);
                 } else {
-                    throw new Error('createClient not found on window.supabase or window.Supabase');
+                    // Debug Logging
+                    const sb = window.supabase || window.Supabase;
+                    if (sb) {
+                        console.error('Supabase Object Found but keys missing:', Object.keys(sb));
+                        if (sb.default) console.error('Supabase.default keys:', Object.keys(sb.default));
+                    }
+                    throw new Error('createClient not found in global supabase object');
                 }
 
                 console.log('Supabase Client Initialized');
