@@ -162,8 +162,6 @@ const placeOverlayBtn = document.getElementById('placeOverlayBtn');
 const cancelOverlayBtn = document.getElementById('cancelOverlayBtn');
 const overlayXInput = document.getElementById('overlayX');
 const overlayYInput = document.getElementById('overlayY');
-const overlayXInput = document.getElementById('overlayX');
-const overlayYInput = document.getElementById('overlayY');
 const overlayScaleInput = document.getElementById('overlayScale');
 let overlayOpacity = 0.5; // Default Opacity declared globally
 
