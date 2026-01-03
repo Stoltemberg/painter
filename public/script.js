@@ -1018,19 +1018,28 @@ canvas.addEventListener('wheel', e => {
     const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
     const nextScale = scale * (1 + delta);
 
+    if (nextScale < 0.05 || nextScale > 50) return;
+
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    const wx = mx / scale + offsetX;
-    const wy = my / scale + offsetY;
+    // Accounts for center translation in draw()
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
 
-    if (nextScale < 0.05) return;
-    if (nextScale > 50) return;
+    // 1. Get world position under mouse BEFORE zoom
+    const wx = (mx - cx) / scale + offsetX;
+    const wy = (my - cy) / scale + offsetY;
+
+    // 2. Update Scale
     scale = nextScale;
 
-    offsetX = wx - mx / scale;
-    offsetY = wy - my / scale;
+    // 3. Recalculate Offset to keep world pos steady
+    // wx = (mx - cx) / newScale + newOffsetX
+    offsetX = wx - (mx - cx) / scale;
+    offsetY = wy - (my - cy) / scale;
+
     clampView();
 
     needsRedraw = true;
