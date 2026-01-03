@@ -1198,13 +1198,19 @@ function handleUser(user) {
 }
 
 socket.on('connect', () => {
+    console.log('Socket connected:', socket.id);
     if (statusDiv) {
         statusDiv.textContent = 'Connected';
         statusDiv.style.color = '#4ade80';
     }
+    // Fix: Center view on correct board coordinates
+    offsetX = boardSize / 2 - window.innerWidth / 2 / scale;
+    offsetY = boardSize / 2 - window.innerHeight / 2 / scale;
+    needsRedraw = true;
 });
 
-socket.on('disconnect', () => {
+socket.on('disconnect', (reason) => {
+    console.warn('Socket disconnected:', reason);
     if (statusDiv) {
         statusDiv.textContent = 'Reconnecting...';
         statusDiv.style.color = '#f87171';
@@ -1268,7 +1274,12 @@ socket.on('auth_success', (data) => {
 
 socket.on('board_info', (info) => {
     console.log('Board info received:', info);
-    // Could update boardSize dynamically here if we wanted
+    // Ensure boardSize matches server
+    if (info.width && info.height) {
+        boardSize = info.width; // 3000 default
+        // re-center if needed?
+        // bufferCanvas.width/height is already 3000
+    }
 });
 
 socket.on('board_chunk', (chunk) => {
@@ -1400,6 +1411,7 @@ socket.on('batch_pixels', (data) => {
 });
 
 socket.on('init', (data) => {
+    console.log('Init Payload Received. Size:', data.byteLength || data.length);
     // If data is buffer/arraybuffer
     if (data instanceof ArrayBuffer) {
         const uint8 = new Uint8Array(data);
