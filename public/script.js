@@ -1132,6 +1132,8 @@ let maxInk = 250;
 let supabaseClient = null; // Renamed to avoid window.supabase collision
 
 async function initSupabase() {
+    if (supabaseClient) return; // Already initialized
+
     try {
         const res = await fetch('/api/config');
         const config = await res.json();
