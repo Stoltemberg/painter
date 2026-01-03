@@ -243,12 +243,8 @@ async function handleFileUpload(file, targetX, targetY) {
     }
 }
 
-if (cancelOverlayBtn) {
-    cancelOverlayBtn.addEventListener('click', () => {
-        if (overlayControls) overlayControls.classList.add('hidden');
-        overlayInput.value = ''; // Reset
-    });
-}
+// cancelOverlayBtn listener removed
+
 
 if (placeOverlayBtn) {
     placeOverlayBtn.addEventListener('click', () => {
