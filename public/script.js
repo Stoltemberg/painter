@@ -166,9 +166,94 @@ const overlayScaleInput = document.getElementById('overlayScale');
 
 if (overlayBtn) {
     overlayBtn.addEventListener('click', () => {
-        if (overlayControls) overlayControls.classList.remove('hidden');
+        currentMode = 'overlay'; // Enter Overlay Edit Mode
+        canvas.style.cursor = 'default';
+        overlayBtn.style.border = '2px solid #4ade80';
+
+        // Reset others
+        if (brushBtn) brushBtn.style.border = '1px solid #555';
+        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
+        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
+        if (fillBtn) fillBtn.style.border = '1px solid #555';
+        if (lineBtn) lineBtn.style.border = '1px solid #555';
+        if (stampBtn) stampBtn.style.border = '1px solid #555';
         if (stampOptions) stampOptions.classList.add('hidden');
     });
+}
+
+// Global Drag & Drop Prevention (Stop opening in new tab)
+window.addEventListener('dragover', e => e.preventDefault(), { passive: false });
+window.addEventListener('drop', e => e.preventDefault(), { passive: false });
+
+// Canvas Drag & Drop Upload
+canvas.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    canvas.style.boxShadow = 'inset 0 0 20px #4ade80';
+});
+
+canvas.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    canvas.style.boxShadow = 'none';
+});
+
+canvas.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    canvas.style.boxShadow = 'none';
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (!file.type.startsWith('image/')) return;
+
+        // Calculate drop position in World Coords
+        const rect = canvas.getBoundingClientRect();
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+
+        handleFileUpload(file, x, y);
+    }
+});
+
+async function handleFileUpload(file, targetX, targetY) {
+    const originalText = statusDiv ? statusDiv.textContent : '';
+    if (statusDiv) statusDiv.textContent = 'Uploading Overlay...';
+
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `overlay_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `overlays/${fileName}`;
+
+        // 1. Upload
+        if (!supabaseClient) throw new Error("Supabase not initialized");
+        const { data, error } = await supabaseClient.storage
+            .from('pixel-board')
+            .upload(filePath, file);
+
+        if (error) throw error;
+
+        // 2. Get URL
+        const { data: { publicUrl } } = supabaseClient.storage
+            .from('pixel-board')
+            .getPublicUrl(filePath);
+
+        // 3. Emit simple placement
+        socket.emit('place_overlay', {
+            url: publicUrl,
+            x: targetX,
+            y: targetY,
+            scale: 1.0,
+            owner: myNickname
+        });
+
+        if (statusDiv) statusDiv.textContent = 'Overlay Placed!';
+        setTimeout(() => { if (statusDiv) statusDiv.textContent = originalText; }, 2000);
+
+        // Switch to tool
+        if (overlayBtn) overlayBtn.click();
+
+    } catch (err) {
+        console.error("Upload failed", err);
+        alert("Upload failed: " + err.message);
+        if (statusDiv) statusDiv.textContent = 'Upload Error';
+    }
 }
 
 if (cancelOverlayBtn) {
@@ -684,10 +769,24 @@ function draw() {
     activeOverlays.forEach(ov => {
         if (ov.img && ov.img.complete) {
             // Draw image at world coords
-            // ov: { x, y, scale, img }
             const w = ov.img.width * ov.scale;
             const h = ov.img.height * ov.scale;
             ctx.drawImage(ov.img, ov.x, ov.y, w, h);
+
+            // Draw Selection Box if selected
+            if (currentMode === 'overlay' && ov.id === selectedOverlayId) {
+                ctx.save();
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 2 / scale;
+                ctx.strokeRect(ov.x, ov.y, w, h);
+
+                // Draw Resize Handle (Bottom-Right)
+                ctx.fillStyle = '#4ade80';
+                const handleSize = 10 / scale;
+                ctx.fillRect(ov.x + w - handleSize / 2, ov.y + h - handleSize / 2, handleSize, handleSize);
+                ctx.restore();
+            }
         }
     });
     ctx.globalAlpha = 1.0; // Reset
@@ -925,6 +1024,41 @@ canvas.addEventListener('mousedown', e => {
 
     // Prevent drawing if chat is focused
     if (document.activeElement === chatInput || document.activeElement === nicknameInput) return;
+
+    // Overlay Mode Interaction
+    if (currentMode === 'overlay' && e.button === 0) {
+        const { x, y } = screenToWorld(e.clientX, e.clientY);
+        const hit = getHitOverlay(x, y);
+
+        if (hit) {
+            selectedOverlayId = hit.id;
+            const ov = activeOverlays.find(o => o.id === hit.id);
+
+            overlayDragStart = { x, y };
+            // snapshot state
+            overlayInitialPos = {
+                x: ov.x,
+                y: ov.y,
+                w: ov.img.width * ov.scale,
+                h: ov.img.height * ov.scale,
+                scale: ov.scale
+            };
+
+            if (hit.type === 'body') {
+                isDraggingOverlay = true;
+                canvas.style.cursor = 'move';
+            } else if (hit.type === 'handle') {
+                isResizingOverlay = true;
+                canvas.style.cursor = 'nwse-resize';
+            }
+            needsRedraw = true;
+            return; // Consume
+        } else {
+            selectedOverlayId = null;
+            needsRedraw = true;
+        }
+        return;
+    }
 
     // PIPETTE LOGIC
     if (currentMode === 'pipette' && e.button === 0) {
