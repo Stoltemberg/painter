@@ -688,11 +688,13 @@ minimapCanvas.parentNode.addEventListener('mousedown', (e) => {
     updateMinimapViewport();
 });
 
-// --- Interaction Math ---
+// Coordinate Conversion (Screen -> Board)
 function screenToWorld(sx, sy) {
-    const worldX = sx / scale + offsetX;
-    const worldY = sy / scale + offsetY;
-    return { x: Math.floor(worldX), y: Math.floor(worldY) };
+    // Inverse of Draw Transform:
+    // Screen -> Center Relative -> Unscaled -> World Relative
+    const x = (sx - canvas.width / 2) / scale + offsetX;
+    const y = (sy - canvas.height / 2) / scale + offsetY;
+    return { x: Math.floor(x), y: Math.floor(y) };
 }
 
 // --- Mobile Touch Support ---
