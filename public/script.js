@@ -1410,30 +1410,42 @@ socket.on('batch_pixels', (data) => {
     playPop();
 });
 
-socket.on('init', (data) => {
-    console.log('Init Payload Received. Size:', data.byteLength || data.length);
-    // If data is buffer/arraybuffer
-    if (data instanceof ArrayBuffer) {
-        const uint8 = new Uint8Array(data);
+socket.on('init', async (data) => {
+    console.log('Init Payload Received. Type:', data.constructor.name);
+
+    let buffer;
+    if (data instanceof Blob) {
+        console.log('Converting Blob to ArrayBuffer...');
+        buffer = await data.arrayBuffer();
+    } else if (data instanceof ArrayBuffer) {
+        buffer = data;
+    } else {
+        console.warn('Unknown init data type:', typeof data);
+        return;
+    }
+
+    const uint8 = new Uint8Array(buffer);
+    console.log('Buffer Size:', uint8.length, 'First Byte:', uint8[0]);
+
+    if (uint8.length > 0) {
+        // Create ImageData
         const len = uint8.length / 3;
         const clamped = new Uint8ClampedArray(len * 4);
         for (let i = 0; i < len; i++) {
-            clamped[i * 4] = uint8[i * 3];
-            clamped[i * 4 + 1] = uint8[i * 3 + 1];
-            clamped[i * 4 + 2] = uint8[i * 3 + 2];
-            clamped[i * 4 + 3] = 255;
+            clamped[i * 4] = uint8[i * 3];     // R
+            clamped[i * 4 + 1] = uint8[i * 3 + 1]; // G
+            clamped[i * 4 + 2] = uint8[i * 3 + 2]; // B
+            clamped[i * 4 + 3] = 255;          // A (Opaque)
         }
+
         const imgData = new ImageData(clamped, boardSize, boardSize);
         bufferCtx.putImageData(imgData, 0, 0);
-    } else {
-        // Assume it's the raw buffer if websocket handles it, or handle legacy
-        // But likely it comes as ArrayBuffer in creating From Buffer on server
-        // server.js: const board = Buffer.alloc(...)
-        // socket.emit('init', board) -> sends Buffer -> client receives ArrayBuffer
+
+        needsRedraw = true;
+        updateMinimap();
+        if (statusDiv) statusDiv.textContent = 'Online';
+        console.log('Board initialized from binary.');
     }
-    needsRedraw = true;
-    updateMinimap();
-    if (statusDiv) statusDiv.textContent = 'Online';
 });
 
 
