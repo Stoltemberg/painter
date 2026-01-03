@@ -101,86 +101,72 @@ let currentStamp = 'heart';
 
 // ... existing code ...
 
-// --- Button Listeners ---
-// Tool Selectors
-if (brushBtn) {
-    brushBtn.addEventListener('click', () => {
-        currentMode = 'brush';
-        brushBtn.style.border = '2px solid #4ade80';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-        if (stampOptions) stampOptions.classList.add('hidden');
-        canvas.style.cursor = 'crosshair';
-    });
-}
+// --- Centralized Tool Logic ---
+function setTool(mode) {
+    currentMode = mode;
 
-if (eraserBtn) {
-    eraserBtn.addEventListener('click', () => {
-        currentMode = 'eraser';
-        eraserBtn.style.border = '2px solid #4ade80';
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-        if (stampOptions) stampOptions.classList.add('hidden');
-        canvas.style.cursor = 'cell';
+    // Reset all buttons
+    const tools = ['brush', 'eraser', 'pipette', 'fill', 'line', 'stamp', 'overlay'];
+    tools.forEach(t => {
+        const btn = document.getElementById(`${t}Btn`);
+        if (btn) {
+            if (t === mode) btn.classList.add('active');
+            else btn.classList.remove('active');
+            btn.style.border = t === mode ? '2px solid #4ade80' : '1px solid #555'; // Keep legacy border for now
+        }
     });
-}
 
-if (pipetteBtn) {
-    pipetteBtn.addEventListener('click', () => {
-        currentMode = 'pipette';
-        canvas.style.cursor = 'copy';
-        pipetteBtn.style.border = '2px solid #4ade80';
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-    });
-}
+    // Hide all context panels
+    document.querySelectorAll('.context-panel').forEach(el => el.classList.add('hidden'));
 
-if (stampBtn) {
-    stampBtn.addEventListener('click', () => {
-        currentMode = 'stamp';
+    // UI Updates based on Mode
+    if (mode === 'brush' || mode === 'line') canvas.style.cursor = 'crosshair';
+    else if (mode === 'eraser') canvas.style.cursor = 'cell';
+    else if (mode === 'pipette') canvas.style.cursor = 'copy';
+    else if (mode === 'fill') canvas.style.cursor = 'alias';
+    else if (mode === 'stamp') {
         canvas.style.cursor = 'grab';
-        stampBtn.style.border = '2px solid #4ade80';
-        if (stampOptions) stampOptions.classList.remove('hidden'); // Show options
-        if (overlayControls) overlayControls.classList.add('hidden');
-
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
-        if (lineBtn) lineBtn.style.border = '1px solid #555';
-    });
-}
-
-// --- Overlay UI Logic ---
-const overlayBtn = document.getElementById('overlayBtn');
-const overlayControls = document.getElementById('overlayControls');
-const overlayInput = document.getElementById('overlayInput');
-const placeOverlayBtn = document.getElementById('placeOverlayBtn');
-const cancelOverlayBtn = document.getElementById('cancelOverlayBtn');
-const overlayXInput = document.getElementById('overlayX');
-const overlayYInput = document.getElementById('overlayY');
-const overlayScaleInput = document.getElementById('overlayScale');
-let overlayOpacity = 0.5; // Default Opacity declared globally
-
-if (overlayBtn) {
-    overlayBtn.addEventListener('click', () => {
-        currentMode = 'overlay'; // Enter Overlay Edit Mode
+        if (stampOptions) stampOptions.classList.remove('hidden');
+    }
+    else if (mode === 'overlay') {
         canvas.style.cursor = 'default';
-        overlayBtn.style.border = '2px solid #4ade80';
-
-        // Reset others
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
-        if (lineBtn) lineBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-        if (stampOptions) stampOptions.classList.add('hidden');
-    });
+        if (overlayControls) overlayControls.classList.remove('hidden');
+    }
 }
+
+// Bind Buttons
+const toolMap = {
+    'brushBtn': 'brush',
+    'eraserBtn': 'eraser',
+    'pipetteBtn': 'pipette',
+    'fillBtn': 'fill',
+    'lineBtn': 'line',
+    'stampBtn': 'stamp',
+    'overlayBtn': 'overlay'
+};
+
+Object.keys(toolMap).forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.addEventListener('click', () => setTool(toolMap[btnId]));
+    }
+});
+
+// Keyboard Shortcuts
+window.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT') return; // Ignore if typing
+
+    switch (e.key.toLowerCase()) {
+        case 'b': setTool('brush'); break;
+        case 'e': setTool('eraser'); break;
+        case 'i': setTool('pipette'); break;
+        case 'f': setTool('fill'); break;
+        case 'l': setTool('line'); break;
+        case 's': setTool('stamp'); break;
+        case 'o': setTool('overlay'); break;
+        case 'g': if (gridBtn) gridBtn.click(); break;
+    }
+});
 
 // Global Drag & Drop Prevention (Stop opening in new tab)
 window.addEventListener('dragover', e => e.preventDefault(), { passive: false });
@@ -265,94 +251,64 @@ if (cancelOverlayBtn) {
 }
 
 if (placeOverlayBtn) {
-    placeOverlayBtn.addEventListener('click', async () => {
+    placeOverlayBtn.addEventListener('click', () => {
+        overlayInput.click(); // Trigger hidden file input
+    });
+}
+
+if (overlayInput) {
+    overlayInput.addEventListener('change', async () => {
         const file = overlayInput.files[0];
-        if (!file) {
-            alert('Please select an image first.');
+        if (!file) return;
+
+        if (!supabaseClient) {
+            alert('Supabase connection required.');
             return;
         }
 
-        if (!supabaseClient) {
-            alert('You must be logged in/connected to Supabase to upload overlays.');
-            // Fallback: Check if we have anon key configured even if not "logged in" user
-            // We'll proceed and let the upload fail if permissions deny.
-        }
-
-        placeOverlayBtn.textContent = 'Uploading...';
+        const originalText = placeOverlayBtn ? placeOverlayBtn.textContent : '';
+        if (placeOverlayBtn) placeOverlayBtn.textContent = 'Uploading...';
 
         try {
-            // 1. Upload to Supabase Storage
             const fileExt = file.name.split('.').pop();
             const fileName = `overlay_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
             const filePath = `overlays/${fileName}`;
 
-            // Ensure bucket 'pixel-board' exists. We assume it does from previous steps.
             const { data, error } = await supabaseClient.storage
                 .from('pixel-board')
                 .upload(filePath, file);
 
             if (error) throw error;
 
-            // 2. Get Public URL
             const { data: { publicUrl } } = supabaseClient.storage
                 .from('pixel-board')
                 .getPublicUrl(filePath);
 
-            // 3. Emit to Server
-            const x = parseInt(overlayXInput.value) || 0;
-            const y = parseInt(overlayYInput.value) || 0;
-            const scale = parseFloat(overlayScaleInput.value) || 1.0;
-
-            console.log('Overlay Placed:', publicUrl, x, y, scale);
+            // Center on screen
+            const x = Math.floor(offsetX + (canvas.width / 2) / scale - 150); // Rough center
+            const y = Math.floor(offsetY + (canvas.height / 2) / scale - 150);
 
             socket.emit('place_overlay', {
                 url: publicUrl,
-                x, y, scale,
+                x: x > 0 ? x : 0,
+                y: y > 0 ? y : 0,
+                scale: 1.0,
                 owner: myNickname
             });
 
-            overlayControls.classList.add('hidden');
-            overlayInput.value = '';
             alert('Overlay placed!');
-
         } catch (err) {
-            console.error('Overlay Upload Error:', err);
-            alert('Upload failed: ' + err.message);
+            console.error(err);
+            alert('Upload Error: ' + err.message);
         } finally {
-            placeOverlayBtn.textContent = 'Place';
+            if (placeOverlayBtn) placeOverlayBtn.textContent = 'Upload New';
+            overlayInput.value = '';
         }
     });
 }
 
-if (fillBtn) {
-    fillBtn.addEventListener('click', () => {
-        currentMode = 'fill';
-        canvas.style.cursor = 'alias';
-        fillBtn.style.border = '2px solid #4ade80';
+// Old Tool Listeners removed in favor of setTool
 
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-        if (lineBtn) lineBtn.style.border = '1px solid #555';
-        if (stampOptions) stampOptions.classList.add('hidden');
-    });
-}
-
-if (lineBtn) {
-    lineBtn.addEventListener('click', () => {
-        currentMode = 'line';
-        canvas.style.cursor = 'crosshair';
-        lineBtn.style.border = '2px solid #4ade80';
-
-        if (brushBtn) brushBtn.style.border = '1px solid #555';
-        if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-        if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-        if (stampBtn) stampBtn.style.border = '1px solid #555';
-        if (fillBtn) fillBtn.style.border = '1px solid #555';
-        if (stampOptions) stampOptions.classList.add('hidden');
-    });
-}
 
 function setColor(hex) {
     colorPicker.value = hex;

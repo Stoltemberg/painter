@@ -53,38 +53,68 @@
             <div id="recentColors" class="recent-colors"></div>
 
             <div class="tools">
+                <!-- Main Tools -->
                 <div class="glass-group">
                     <button id="brushBtn" class="tool-btn active" title="Brush (B)">🖌️</button>
                     <button id="eraserBtn" class="tool-btn" title="Eraser (E)">🧽</button>
                     <button id="pipetteBtn" class="tool-btn" title="Pipette (I)">🧪</button>
                     <button id="fillBtn" class="tool-btn" title="Fill (F)">🪣</button>
                     <button id="lineBtn" class="tool-btn" title="Line (L)">📏</button>
-                    <button id="stampBtn" class="tool-btn" title="Stamps">⭐</button>
-                    <button id="overlayBtn" class="tool-btn" title="Upload Overlay">🖼️</button>
+                </div>
+
+                <!-- Special Tools -->
+                <div class="glass-group">
+                    <button id="stampBtn" class="tool-btn" title="Stamps (S)">⭐</button>
+                    <button id="overlayBtn" class="tool-btn" title="Overlays (O)">🖼️</button>
                 </div>
 
                 <div class="separator"></div>
 
                 <!-- View Tools -->
-                <button id="gridBtn" title="Toggle Grid">▦</button>
-                <button id="viewModeBtn" title="Toggle Restricted View">🔓</button>
-                <button id="resetView" title="Reset View">🏠</button>
+                <div class="glass-group">
+                    <button id="gridBtn" title="Toggle Grid (G)">▦</button>
+                    <button id="viewModeBtn" title="Toggle View Mode">🔓</button>
+                    <button id="resetView" title="Reset View">🏠</button>
+                </div>
 
                 <div class="separator"></div>
 
                 <!-- System -->
-                <button id="exportBtn" title="Export Image">📸</button>
-                <button id="themeBtn" title="Toggle Theme">🌗</button>
-                <button id="soundBtn" title="Toggle Sound">🔊</button>
-
+                <div class="glass-group">
+                    <button id="exportBtn" title="Export Image">📸</button>
+                    <button id="themeBtn" title="Toggle Theme">🌗</button>
+                    <button id="soundBtn" title="Toggle Sound">🔊</button>
+                </div>
             </div>
 
-            <!-- Stamp Options (Hidden by default) -->
-            <div id="stampOptions" class="stamp-options hidden">
-                <button class="stamp-opt active" data-shape="heart">❤️</button>
-                <button class="stamp-opt" data-shape="star">⭐</button>
-                <button class="stamp-opt" data-shape="smiley">😊</button>
-                <button class="stamp-opt" data-shape="checker">🏁</button>
+            <!-- CONTEXT PANELS (Dynamic) -->
+
+            <!-- Stamp Options -->
+            <div id="stampOptions" class="context-panel hidden">
+                <div class="panel-header">Stamps</div>
+                <div class="panel-content">
+                    <button class="stamp-opt active" data-shape="heart">❤️</button>
+                    <button class="stamp-opt" data-shape="star">⭐</button>
+                    <button class="stamp-opt" data-shape="smiley">😊</button>
+                    <button class="stamp-opt" data-shape="checker">🏁</button>
+                </div>
+            </div>
+
+            <!-- Overlay Controls -->
+            <div id="overlayControls" class="context-panel hidden">
+                <div class="panel-header">Overlay Controls</div>
+                <div class="panel-content" style="display: flex; gap: 10px; align-items: center;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label for="overlayOpacity" style="font-size: 0.7rem;">Opacity</label>
+                        <input type="range" id="overlayOpacity" min="0.1" max="1.0" step="0.1" value="0.5">
+                    </div>
+                    <div class="divider"></div>
+                    <button id="placeOverlayBtn" class="action-btn">Upload New</button>
+                    <button id="clearOverlaysBtn" class="danger-btn" title="Clear All">🗑️</button>
+
+                    <!-- Hidden File Input -->
+                    <input type="file" id="overlayInput" accept="image/*" style="display: none;">
+                </div>
             </div>
 
             <div class="teleport-bar">

@@ -560,37 +560,73 @@ input::placeholder {
     color: var(--text-secondary);
 }
 
-/* Stamp Menu */
-.stamp-options {
+/* Context Panels */
+.context-panel {
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
     border-radius: 12px;
-    display: flex;
-    gap: 8px;
-    padding: 8px;
+    padding: 12px;
     position: absolute;
-    bottom: 90px;
+    bottom: 100px;
+    /* Above toolbar */
     left: 50%;
     transform: translateX(-50%);
     border: 1px solid var(--glass-border);
+    min-width: 200px;
+    animation: fadein 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.stamp-opt {
-    background: transparent;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: transform 0.2s;
-}
-
-.stamp-opt:hover {
-    transform: scale(1.2);
-}
-
-.stamp-options.hidden {
+.context-panel.hidden {
     display: none;
 }
+
+.panel-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.action-btn {
+    background: var(--glass-highlight);
+    border: 1px solid var(--glass-border);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    background: var(--accent);
+    color: #0f172a;
+}
+
+.danger-btn {
+    background: rgba(244, 63, 94, 0.2);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.danger-btn:hover {
+    background: var(--danger);
+    color: white;
+}
+
 
 /* Cursors */
 #cursor-layer {
