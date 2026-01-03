@@ -552,50 +552,52 @@ function clampView() {
 }
 
 // --- Rendering (Optimized Loop) ---
+// --- Rendering (Optimized Loop) ---
 function renderLoop() {
     if (needsRedraw) {
-        needsRedraw = true;
+        draw();
         needsRedraw = false;
     }
     requestAnimationFrame(renderLoop);
 }
-requestAnimationFrame(renderLoop);
 
 function draw() {
+    // Clear Screen
     ctx.fillStyle = '#111';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    ctx.translate(-offsetX * scale, -offsetY * scale);
-    ctx.scale(scale, scale);
-    // ... rest of draw ...
 
+    // Apply Transform
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-offsetX, -offsetY);
+
+    // Draw Board (Buffer)
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bufferCanvas, 0, 0);
 
     // Draw Grid
     if (scale > 15 || (typeof showGridOverride !== 'undefined' && showGridOverride)) {
-        const vx = offsetX;
-        const vy = offsetY;
+        const vx = offsetX - (canvas.width / 2) / scale;
+        const vy = offsetY - (canvas.height / 2) / scale;
         const vw = canvas.width / scale;
         const vh = canvas.height / scale;
-        // Optimization: only draw grid in view
         drawGrid(ctx, vx, vy, vw, vh);
     }
 
     // Ghost Cursor
     if ((currentMode === 'brush' || currentMode === 'eraser') && hoverPos && !isDragging) {
-        ctx.fillStyle = currentMode === 'eraser' ? 'rgba(255,255,255,0.5)' : colorPicker.value + '80'; // 50% opacity
-        if (currentMode !== 'eraser') {
-            // Hex + Alpha. colorPicker.value is #RRGGBB. '80' is 128/255 alpha.
-            // If built-in color picker doesn't support alpha, manually parse or use simpler css color.
-            // Simplified:
+        if (currentMode === 'eraser') {
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        } else {
             const hex = colorPicker.value;
             const r = parseInt(hex.slice(1, 3), 16);
             const g = parseInt(hex.slice(3, 5), 16);
             const b = parseInt(hex.slice(5, 7), 16);
             ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
         }
+
         ctx.fillRect(Math.floor(hoverPos.x), Math.floor(hoverPos.y), 1, 1);
         ctx.strokeStyle = 'rgba(255,255,255,0.8)';
         ctx.lineWidth = 0.1;
