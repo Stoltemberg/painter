@@ -567,9 +567,7 @@ setInterval(() => {
 setTimeout(draw, 500);
 setTimeout(draw, 1000);
 
-// Init App
-initSupabase();
-initApp();
+// Init App call moved to end of file to ensure variables are declared.
 
 function draw() {
     // Clear Screen
