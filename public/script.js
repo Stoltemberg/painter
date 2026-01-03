@@ -765,7 +765,7 @@ function draw() {
     }
 
     // --- Draw Overlays ---
-    ctx.globalAlpha = 0.5; // Semi-transparent
+    ctx.globalAlpha = overlayOpacity; // Dynamic Opacity
     activeOverlays.forEach(ov => {
         if (ov.img && ov.img.complete && ov.img.naturalWidth > 0) {
             // Draw image at world coords
@@ -1237,8 +1237,8 @@ canvas.addEventListener('mousemove', e => {
 
     // Overlay Interaction (Move/Resize)
     if (currentMode === 'overlay') {
-        // Cursor update
         const hit = getHitOverlay(x, y);
+
         if (!isDraggingOverlay && !isResizingOverlay) {
             canvas.style.cursor = hit ? (hit.type === 'handle' ? 'nwse-resize' : 'move') : 'default';
         }
@@ -1256,7 +1256,8 @@ canvas.addEventListener('mousemove', e => {
         } else if (isResizingOverlay && selectedOverlayId) {
             const ov = activeOverlays.find(o => o.id === selectedOverlayId);
             if (ov && ov.img) {
-                const currentW = x - ov.x; // Mouse relative to TopLeft
+                const currentW = x - ov.x;
+                // Simple Proportional Scale
                 const newScale = Math.max(0.1, currentW / ov.img.width);
                 ov.scale = newScale;
                 needsRedraw = true;
@@ -1310,6 +1311,21 @@ const endInput = () => {
 };
 
 canvas.addEventListener('mouseup', (e) => {
+    if (isDraggingOverlay || isResizingOverlay) {
+        if (selectedOverlayId) {
+            const ov = activeOverlays.find(o => o.id === selectedOverlayId);
+            if (ov) {
+                socket.emit('update_overlay', {
+                    id: ov.id,
+                    x: ov.x,
+                    y: ov.y,
+                    scale: ov.scale
+                });
+            }
+        }
+        isDraggingOverlay = false;
+        isResizingOverlay = false;
+    }
     if (isDraggingOverlay || isResizingOverlay) {
         // Commit change
         if (selectedOverlayId) {
