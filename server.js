@@ -547,7 +547,7 @@ io.on('connection', async (socket) => {
     // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
     // (Moved to global scope above)
 
-    socket.emit('init', board);
+    // socket.emit('init', board); // Removed duplicate
 
     // --- Socket Event Handlers ---
     socket.on('pixel', (data) => {

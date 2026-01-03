@@ -1561,7 +1561,6 @@ socket.on('chat_history', (history) => {
 const leaderboardDiv = document.getElementById('leaderboard');
 socket.on('leaderboard', (data) => {
     if (!leaderboardDiv) return;
-    if (!leaderboardDiv) return;
     if (data.length === 0) {
         // Show empty state instead of hiding
         leaderboardDiv.style.display = 'block';
@@ -1647,63 +1646,7 @@ if (coordsDiv) {
     });
 }
 
-// V6: Cursor Reactions
-document.addEventListener('keydown', (e) => {
-    // Ignore if typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-    const keyMap = {
-        '1': '❤️',
-        '2': '😂',
-        '3': '😎',
-        '4': '🔥'
-    };
-
-    if (keyMap[e.key]) {
-        const emoji = keyMap[e.key];
-        // Ensure lastWorldPos is defined (track it in mousemove if not already)
-        // If undefined, maybe use center of screen or previous logic
-        if (typeof lastWorldPos === 'undefined') return;
-
-        socket.emit('reaction', {
-            emoji: emoji,
-            x: lastWorldPos.x,
-            y: lastWorldPos.y
-        });
-        showReaction({ x: lastWorldPos.x, y: lastWorldPos.y, emoji, id: 'me' });
-    }
-});
-
-// Helper for reactions
-function showReaction(data) {
-    const { x, y, emoji, id } = data;
-    const div = document.createElement('div');
-    div.textContent = emoji;
-    div.style.position = 'absolute';
-    div.style.left = '0';
-    div.style.top = '0';
-    div.style.fontSize = '24px';
-    div.style.pointerEvents = 'none';
-    div.style.zIndex = '1000';
-
-    // Transform world to screen
-    const screenX = (x * scale) + offsetX;
-    const screenY = (y * scale) + offsetY;
-    div.style.transform = `translate(${screenX}px, ${screenY}px)`;
-    div.style.transition = 'transform 1s ease-out, opacity 1s ease-out';
-
-    document.body.appendChild(div);
-
-    // Animate
-    requestAnimationFrame(() => {
-        div.style.transform = `translate(${screenX}px, ${screenY - 50}px)`; // Float up
-        div.style.opacity = '0';
-    });
-
-    setTimeout(() => {
-        div.remove();
-    }, 1000);
-}
+// (Duplicate showReaction and keydown listener removed)
 
 // --- Initialization ---
 async function initApp() {
