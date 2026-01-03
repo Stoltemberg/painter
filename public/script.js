@@ -1235,6 +1235,35 @@ canvas.addEventListener('mousemove', e => {
     if (!isDragging && !isPainting) needsRedraw = true; // Redraw for ghost cursor
 
 
+    // Overlay Interaction (Move/Resize)
+    if (currentMode === 'overlay') {
+        // Cursor update
+        const hit = getHitOverlay(x, y);
+        if (!isDraggingOverlay && !isResizingOverlay) {
+            canvas.style.cursor = hit ? (hit.type === 'handle' ? 'nwse-resize' : 'move') : 'default';
+        }
+
+        if (isDraggingOverlay && selectedOverlayId) {
+            const dx = x - overlayDragStart.x;
+            const dy = y - overlayDragStart.y;
+
+            const ov = activeOverlays.find(o => o.id === selectedOverlayId);
+            if (ov) {
+                ov.x = overlayInitialPos.x + dx;
+                ov.y = overlayInitialPos.y + dy;
+                needsRedraw = true;
+            }
+        } else if (isResizingOverlay && selectedOverlayId) {
+            const ov = activeOverlays.find(o => o.id === selectedOverlayId);
+            if (ov && ov.img) {
+                const currentW = x - ov.x; // Mouse relative to TopLeft
+                const newScale = Math.max(0.1, currentW / ov.img.width);
+                ov.scale = newScale;
+                needsRedraw = true;
+            }
+        }
+    }
+
     if (isPainting && currentMode === 'brush') {
         paint(e.clientX, e.clientY);
     }
@@ -1281,6 +1310,23 @@ const endInput = () => {
 };
 
 canvas.addEventListener('mouseup', (e) => {
+    if (isDraggingOverlay || isResizingOverlay) {
+        // Commit change
+        if (selectedOverlayId) {
+            const ov = activeOverlays.find(o => o.id === selectedOverlayId);
+            if (ov) {
+                socket.emit('update_overlay', {
+                    id: ov.id,
+                    x: ov.x,
+                    y: ov.y,
+                    scale: ov.scale
+                });
+            }
+        }
+        isDraggingOverlay = false;
+        isResizingOverlay = false;
+    }
+
     if (currentMode === 'line' && lineStart) {
         const { x, y } = screenToWorld(e.clientX, e.clientY);
         // Commit Line

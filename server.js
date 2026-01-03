@@ -935,8 +935,15 @@ io.on('connection', async (socket) => {
             const text = msg.text.substring(0, MAX_MSG_LENGTH);
 
             // ADMIN TOOLS (Secret Command)
-            if (text.startsWith('/clear admin123')) {
-                console.log('Admin Clear Command Executed');
+            if (text.startsWith('/clear admin123') || text === '/clear_overlays') {
+                console.log('Clearing Overlays/Board');
+                if (text === '/clear_overlays') {
+                    activeOverlays = [];
+                    io.emit('update_overlays', activeOverlays);
+                    io.emit('chat', { id: 'SYSTEM', text: 'Overlays cleared.', name: 'System' });
+                    return;
+                }
+
                 board.fill(255);
                 needsSave = true;
                 io.emit('init', board); // Reload everyone
