@@ -541,7 +541,7 @@ io.on('connection', async (socket) => {
     // System Join Message
     socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
 
-    socket.emit('init', board);
+    // socket.emit('init', board); // Removed unused full board emit (client uses chunks)
 
     // V7: Ink / Energy System
     // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
