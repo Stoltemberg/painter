@@ -252,7 +252,7 @@ const loginBtn = document.getElementById('loginBtn'); // In Top Bar
 if (signInBtn) {
     signInBtn.addEventListener('click', async () => {
         authStatus.textContent = 'Logging in...';
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: emailInput.value,
             password: passwordInput.value,
         });
@@ -267,7 +267,7 @@ if (signInBtn) {
 if (signUpBtn) {
     signUpBtn.addEventListener('click', async () => {
         authStatus.textContent = 'Signing up...';
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
             email: emailInput.value,
             password: passwordInput.value,
         });
@@ -1128,28 +1128,29 @@ const inkFill = document.getElementById('inkFill');
 let ink = 0;
 let maxInk = 250;
 
+// Auth
+let supabaseClient = null; // Renamed to avoid window.supabase collision
+
 async function initSupabase() {
     try {
         const res = await fetch('/api/config');
         const config = await res.json();
 
         if (config.supabaseUrl && config.supabaseKey) {
-            // Check if loaded
-            if (typeof window.supabase === 'undefined' && typeof window.Supabase === 'undefined') {
-                console.error('Supabase library not loaded. Check script tag.');
+            // Check if library loaded
+            if (typeof window.supabase === 'undefined') {
+                console.error('Supabase lib not found on window.supabase');
                 return;
             }
 
             // Init Client
             try {
-                let factory = null;
-                if (window.supabase?.createClient) factory = window.supabase;
-                else if (window.supabase?.default?.createClient) factory = window.supabase.default;
-                else if (window.Supabase?.createClient) factory = window.Supabase;
-                else if (window.Supabase?.default?.createClient) factory = window.Supabase.default;
+                // The UMD build usually exposes window.supabase.createClient
+                const createClient = window.supabase.createClient || window.supabase.default?.createClient;
 
-                if (factory) {
-                    supabase = factory.createClient(config.supabaseUrl, config.supabaseKey);
+                if (typeof createClient === 'function') {
+                    supabaseClient = createClient(config.supabaseUrl, config.supabaseKey);
+                    console.log('Supabase Client Initialized!');
                 } else {
                     // Debug Logging
                     const sb = window.supabase || window.Supabase;
@@ -1160,20 +1161,25 @@ async function initSupabase() {
                     throw new Error('createClient not found in global supabase object');
                 }
 
-                console.log('Supabase Client Initialized');
-
                 // Check Session
-                const { data } = await supabase.auth.getSession();
+                const { data } = await supabaseClient.auth.getSession();
                 if (data?.session?.user) {
                     handleUser(data.session.user);
                 }
 
                 // Auth Listener
-                supabase.auth.onAuthStateChange((event, session) => {
+                supabaseClient.auth.onAuthStateChange((event, session) => {
                     console.log('Auth State Change:', event);
                     if (event === 'SIGNED_IN' && session?.user) {
                         handleUser(session.user);
+                        if (authOverlay) authOverlay.style.display = 'none';
+                        if (loginBtn) {
+                            loginBtn.textContent = 'Logout';
+                            loginBtn.onclick = () => supabaseClient.auth.signOut();
+                        }
                     } else if (event === 'SIGNED_OUT') {
+                        // Reset to Guest
+                        localStorage.removeItem('painter_nickname'); // Optional clear
                         window.location.reload();
                     }
                 });
@@ -1194,13 +1200,13 @@ function handleUser(user) {
     if (!loginBtn) return;
     loginBtn.textContent = 'Log Out';
     loginBtn.onclick = async () => {
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         window.location.reload();
     };
 
     // Send token to server to upgrade socket
-    if (supabase) {
-        supabase.auth.getSession().then(({ data }) => {
+    if (supabaseClient) {
+        supabaseClient.auth.getSession().then(({ data }) => {
             if (data.session) {
                 // Link auth token on session restore
                 socket.emit('auth', data.session.access_token);
