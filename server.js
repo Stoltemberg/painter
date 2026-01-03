@@ -876,6 +876,41 @@ io.on('connection', async (socket) => {
         });
     });
 
+    // --- Overlays ---
+    socket.on('place_overlay', (data) => {
+        // data: { url, x, y, scale, owner }
+        if (!data || !data.url) return;
+
+        const newOverlay = {
+            id: `ov_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            url: data.url,
+            x: data.x || 0,
+            y: data.y || 0,
+            scale: data.scale || 1,
+            owner: data.owner || 'Anon',
+            createdAt: Date.now()
+        };
+
+        activeOverlays.push(newOverlay);
+        if (activeOverlays.length > 20) activeOverlays.shift(); // Limit 20
+
+        io.emit('update_overlays', activeOverlays);
+
+        const sysMsg = { id: 'SYSTEM', text: `New Overlay placed by ${newOverlay.owner}`, name: 'System' };
+        io.emit('chat', sysMsg);
+    });
+
+    socket.on('update_overlay', (data) => {
+        // data: { id, x, y, scale }
+        const ov = activeOverlays.find(o => o.id === data.id);
+        if (ov) {
+            ov.x = data.x;
+            ov.y = data.y;
+            ov.scale = data.scale;
+            io.emit('update_overlays', activeOverlays);
+        }
+    });
+
     socket.on('cursor', (data) => {
         socket.name = data.name || 'Anon';
         socket.broadcast.emit('cursor', {
