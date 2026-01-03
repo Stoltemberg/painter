@@ -1132,60 +1132,49 @@ async function initSupabase() {
     try {
         const res = await fetch('/api/config');
         const config = await res.json();
+
         if (config.supabaseUrl && config.supabaseKey) {
             // Check if loaded
-            if (typeof window.supabase === 'undefined') {
+            if (typeof window.supabase === 'undefined' && typeof window.Supabase === 'undefined') {
                 console.error('Supabase library not loaded. Check script tag.');
-                console.log('Window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
                 return;
             }
 
-            // Try to find createClient
+            // Init Client
             try {
-                if (window.supabase && typeof window.supabase.createClient === 'function') {
+                if (window.supabase?.createClient) {
                     supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-                } else if (window.Supabase && typeof window.Supabase.createClient === 'function') {
+                } else if (window.Supabase?.createClient) {
                     supabase = window.Supabase.createClient(config.supabaseUrl, config.supabaseKey);
                 } else {
-                    // Fallback: If not found, just warn and continue.
-                    console.warn('Supabase createClient not found. Auth will be disabled.');
-                    return;
+                    throw new Error('createClient not found on window.supabase or window.Supabase');
                 }
+
+                console.log('Supabase Client Initialized');
+
+                // Check Session
+                const { data } = await supabase.auth.getSession();
+                if (data?.session?.user) {
+                    handleUser(data.session.user);
+                }
+
+                // Auth Listener
+                supabase.auth.onAuthStateChange((event, session) => {
+                    console.log('Auth State Change:', event);
+                    if (event === 'SIGNED_IN' && session?.user) {
+                        handleUser(session.user);
+                    } else if (event === 'SIGNED_OUT') {
+                        window.location.reload();
+                    }
+                });
+
             } catch (err) {
-                console.warn('Supabase Init Error:', err);
-                return; // Continue app even if auth fails
+                console.error('Supabase Init Logic Error:', err);
+                if (statusDiv) statusDiv.textContent = 'Login Error';
             }
-
-            console.log('Supabase Client Initialized');
-
-            // Check Session
-            const { data } = await supabase.auth.getSession();
-            if (data.session) {
-                handleUser(data.session.user);
-            }
-
-            // Auth Listener
-            supabase.auth.onAuthStateChange((event, session) => {
-                console.log('Auth State Change:', event, session);
-                if (event === 'SIGNED_IN' && session) {
-                    handleUser(session.user);
-                    if (authOverlay) authOverlay.style.display = 'none';
-                    if (loginBtn) {
-                        loginBtn.textContent = 'Logout';
-                        loginBtn.onclick = () => supabase.auth.signOut();
-                    }
-                } else if (event === 'SIGNED_OUT') {
-                    myNickname = 'Guest';
-                    if (nicknameInput) nicknameInput.value = myNickname;
-                    if (loginBtn) {
-                        loginBtn.textContent = 'Log In';
-                        loginBtn.onclick = () => { if (authOverlay) authOverlay.style.display = 'flex'; };
-                    }
-                }
-            });
         }
-    } catch (e) {
-        console.error('Failed to init Supabase:', e);
+    } catch (err) {
+        console.error('Supabase Config Error:', err);
     }
 }
 // Removed module-level initSupabase() call to prevent double-init.
