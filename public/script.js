@@ -767,7 +767,7 @@ function draw() {
     // --- Draw Overlays ---
     ctx.globalAlpha = 0.5; // Semi-transparent
     activeOverlays.forEach(ov => {
-        if (ov.img && ov.img.complete) {
+        if (ov.img && ov.img.complete && ov.img.naturalWidth > 0) {
             // Draw image at world coords
             const w = ov.img.width * ov.scale;
             const h = ov.img.height * ov.scale;
