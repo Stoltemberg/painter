@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const compression = require('compression');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
@@ -256,7 +255,6 @@ const initBoard = async () => {
 // Run init
 initBoard();
 
-app.use(compression());
 app.use(express.static('public'));
 
 // --- Middleware: Simple Basic Auth ---
@@ -555,7 +553,7 @@ io.on('connection', async (socket) => {
     // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
     // (Moved to global scope above)
 
-    // socket.emit('init', board); // Removed duplicate
+    socket.emit('init', board); // Restored fallback execution
 
     // --- Socket Event Handlers ---
     socket.on('pixel', (data) => {
