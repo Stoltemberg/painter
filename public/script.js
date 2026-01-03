@@ -143,13 +143,98 @@ if (stampBtn) {
         currentMode = 'stamp';
         canvas.style.cursor = 'grab';
         stampBtn.style.border = '2px solid #4ade80';
-        stampOptions.classList.remove('hidden'); // Show options
+        if (stampOptions) stampOptions.classList.remove('hidden'); // Show options
+        if (overlayControls) overlayControls.classList.add('hidden');
 
         if (brushBtn) brushBtn.style.border = '1px solid #555';
         if (eraserBtn) eraserBtn.style.border = '1px solid #555';
         if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
         if (fillBtn) fillBtn.style.border = '1px solid #555';
         if (lineBtn) lineBtn.style.border = '1px solid #555';
+    });
+}
+
+// --- Overlay UI Logic ---
+const overlayBtn = document.getElementById('overlayBtn');
+const overlayControls = document.getElementById('overlayControls');
+const overlayInput = document.getElementById('overlayInput');
+const placeOverlayBtn = document.getElementById('placeOverlayBtn');
+const cancelOverlayBtn = document.getElementById('cancelOverlayBtn');
+const overlayXInput = document.getElementById('overlayX');
+const overlayYInput = document.getElementById('overlayY');
+const overlayScaleInput = document.getElementById('overlayScale');
+
+if (overlayBtn) {
+    overlayBtn.addEventListener('click', () => {
+        if (overlayControls) overlayControls.classList.remove('hidden');
+        if (stampOptions) stampOptions.classList.add('hidden');
+    });
+}
+
+if (cancelOverlayBtn) {
+    cancelOverlayBtn.addEventListener('click', () => {
+        if (overlayControls) overlayControls.classList.add('hidden');
+        overlayInput.value = ''; // Reset
+    });
+}
+
+if (placeOverlayBtn) {
+    placeOverlayBtn.addEventListener('click', async () => {
+        const file = overlayInput.files[0];
+        if (!file) {
+            alert('Please select an image first.');
+            return;
+        }
+
+        if (!supabaseClient) {
+            alert('You must be logged in/connected to Supabase to upload overlays.');
+            // Fallback: Check if we have anon key configured even if not "logged in" user
+            // We'll proceed and let the upload fail if permissions deny.
+        }
+
+        placeOverlayBtn.textContent = 'Uploading...';
+
+        try {
+            // 1. Upload to Supabase Storage
+            const fileExt = file.name.split('.').pop();
+            const fileName = `overlay_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const filePath = `overlays/${fileName}`;
+
+            // Ensure bucket 'pixel-board' exists. We assume it does from previous steps.
+            const { data, error } = await supabaseClient.storage
+                .from('pixel-board')
+                .upload(filePath, file);
+
+            if (error) throw error;
+
+            // 2. Get Public URL
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('pixel-board')
+                .getPublicUrl(filePath);
+
+            // 3. Emit to Server
+            const x = parseInt(overlayXInput.value) || 0;
+            const y = parseInt(overlayYInput.value) || 0;
+            const scale = parseFloat(overlayScaleInput.value) || 1.0;
+
+            console.log('Overlay Placed:', publicUrl, x, y, scale);
+
+            socket.emit('place_overlay', {
+                url: publicUrl,
+                x, y, scale,
+                owner: myNickname
+            });
+
+            overlayControls.classList.add('hidden');
+            overlayInput.value = '';
+            alert('Overlay placed!');
+
+        } catch (err) {
+            console.error('Overlay Upload Error:', err);
+            alert('Upload failed: ' + err.message);
+        } finally {
+            placeOverlayBtn.textContent = 'Place';
+        }
     });
 }
 
@@ -594,6 +679,19 @@ function draw() {
         drawGrid(ctx, vx, vy, vw, vh);
     }
 
+    // --- Draw Overlays ---
+    ctx.globalAlpha = 0.5; // Semi-transparent
+    activeOverlays.forEach(ov => {
+        if (ov.img && ov.img.complete) {
+            // Draw image at world coords
+            // ov: { x, y, scale, img }
+            const w = ov.img.width * ov.scale;
+            const h = ov.img.height * ov.scale;
+            ctx.drawImage(ov.img, ov.x, ov.y, w, h);
+        }
+    });
+    ctx.globalAlpha = 1.0; // Reset
+
     // Ghost Cursor
     if ((currentMode === 'brush' || currentMode === 'eraser') && hoverPos && !isDragging) {
         if (currentMode === 'eraser') {
@@ -616,6 +714,42 @@ function draw() {
 
     updateCursors();
 }
+
+// --- Overlay State ---
+let activeOverlays = []; // [{ id, x, y, scale, url, img: Image }]
+
+socket.on('update_overlays', (overlays) => {
+    console.log('Received Overlays:', overlays);
+
+    // Sync list
+    // reusing images if URL matches to avoid flickering/reload
+    const newMap = new Map();
+    overlays.forEach(o => newMap.set(o.id, o));
+
+    // Remove old
+    activeOverlays = activeOverlays.filter(old => {
+        if (newMap.has(old.id)) {
+            // Update props but keep image obj
+            const fresh = newMap.get(old.id);
+            old.x = fresh.x;
+            old.y = fresh.y;
+            old.scale = fresh.scale;
+            newMap.delete(old.id); // Done
+            return true;
+        }
+        return false;
+    });
+
+    // Add new
+    newMap.forEach((val, key) => {
+        const img = new Image();
+        img.src = val.url;
+        img.onload = () => needsRedraw = true;
+        activeOverlays.push({ ...val, img });
+    });
+
+    needsRedraw = true;
+});
 
 function drawGrid(ctx, vx, vy, vw, vh) {
     ctx.beginPath();

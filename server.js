@@ -53,6 +53,9 @@ let teamScores = { red: 0, blue: 0, green: 0 };
 const TEAMS = ['none', 'red', 'blue', 'green'];
 const TEAM_SCORES_FILE = path.join(__dirname, 'team_scores.json');
 
+// Active Overlays (In-Memory)
+let activeOverlays = [];
+
 
 // Load Team Scores (Async with Cloud Fallback)
 async function initTeamScores() {
@@ -902,12 +905,23 @@ io.on('connection', async (socket) => {
                 board.fill(255);
                 needsSave = true;
                 io.emit('init', board); // Reload everyone
+                activeOverlays = []; // Clear overlays too
+                io.emit('update_overlays', activeOverlays);
 
                 const sysMsg = { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' };
                 chatHistory.push(sysMsg);
                 if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
                 io.emit('chat', sysMsg);
                 return;
+            }
+
+            // Admin: /rmoverlay [id]
+            if (text.startsWith('/rmoverlay')) {
+                const parts = text.split(' ');
+                if (parts[1]) {
+                    activeOverlays = activeOverlays.filter(o => o.id !== parts[1]);
+                    io.emit('update_overlays', activeOverlays);
+                }
             }
 
             const chatMsg = {
