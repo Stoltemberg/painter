@@ -632,3 +632,7 @@ input::placeholder {
         transform: translateY(0);
     }
 }
+
+.hidden {
+    display: none !important;
+}
