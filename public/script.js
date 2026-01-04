@@ -2150,22 +2150,39 @@ socket.on('auth_success', (data) => {
 
 if (profileBtn) {
     profileBtn.addEventListener('click', async () => {
-        if (!currentUserId || !profileOverlay) return;
+        let userIdToFetch = currentUserId;
+
+        // Fallback: Check Supabase session if currentUserId is not set
+        if (!userIdToFetch && supabaseClient) {
+            const { data } = await supabaseClient.auth.getUser();
+            if (data?.user?.id) userIdToFetch = data.user.id;
+        }
+
+        if (!userIdToFetch || !profileOverlay) return;
 
         profileOverlay.style.display = 'flex';
         document.getElementById('profileName').textContent = 'Loading...';
+        document.getElementById('profilePixelCount').textContent = '...';
+        document.getElementById('profileSessionCount').textContent = '...';
 
         try {
-            const res = await fetch(`/api/stats/user/${currentUserId}`);
+            // Add timestamp to prevent caching
+            const res = await fetch(`/api/stats/user/${userIdToFetch}?t=${Date.now()}`);
+            if (!res.ok) throw new Error('Stats fetch failed');
+
             const stats = await res.json();
 
-            document.getElementById('profileName').textContent = document.getElementById('nicknameInput').value;
+            // Prefer name from input, fallback to email part if needed
+            const currentNick = document.getElementById('nicknameInput')?.value;
+            document.getElementById('profileName').textContent = currentNick || 'User';
+
             document.getElementById('profilePixelCount').textContent = stats.pixel_count || 0;
             document.getElementById('profileSessionCount').textContent = stats.session_count || 0;
 
         } catch (e) {
-            console.error(e);
+            console.error('Profile Load Error:', e);
             document.getElementById('profilePixelCount').textContent = 'Error';
+            document.getElementById('profileSessionCount').textContent = '-';
         }
     });
 }
