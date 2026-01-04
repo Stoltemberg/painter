@@ -963,9 +963,13 @@ io.on('connection', async (socket) => {
                 const state = getInkState(socket);
                 if (!state.isUser) {
                     state.isUser = true;
+                    // Store userId in state
+                    state.id = data.user.id;
                     state.ink = USER_MAX;
                     state.ink = Math.max(state.ink, USER_MAX);
                 }
+                // Ensure ID is always set for re-auth
+                state.id = data.user.id;
 
                 // Link Session to User FIRST
                 if (socket.dbSessionId) {
@@ -1027,7 +1031,12 @@ io.on('connection', async (socket) => {
             return;
         }
 
-        const userId = state.id || (await supabase.auth.getUser(socket.handshake.auth.token)).data?.user?.id;
+        const userId = state.id;
+
+        if (!userId) {
+            socket.emit('nickname_error', 'Session invalid. Please refresh.');
+            return;
+        }
         // Optimization: We should have stored userId on socket during auth
 
         // Let's rely on re-fetching or better, store on socket.
