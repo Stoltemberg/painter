@@ -2192,6 +2192,11 @@ socket.on('nickname_success', (newNick) => {
     // If it was profile overlay change:
     const changeInput = document.getElementById('changeNicknameInput');
     if (changeInput) changeInput.value = '';
+
+    // Reload page to reflect changes properly after a short delay
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
 });
 
 socket.on('nickname_error', (msg) => {

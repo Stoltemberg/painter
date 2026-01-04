@@ -142,3 +142,28 @@
     font-size: 1.5rem;
     font-weight: bold;
 }
+
+/* Profile Actions */
+.profile-actions {
+    margin-top: 25px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.profile-actions label {
+    font-size: 0.85rem;
+    color: #ccc;
+    text-align: left;
+}
+
+#changeNicknameInput {
+    flex: 1;
+}
+
+#changeNicknameBtn {
+    flex: 0 0 auto;
+    padding: 10px 20px;
+}
