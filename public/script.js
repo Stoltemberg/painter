@@ -1571,6 +1571,9 @@ async function initSupabase() {
                         // Reset to Guest
                         localStorage.removeItem('painter_nickname'); // Optional clear
                         window.location.reload();
+                    } else if (event === 'PASSWORD_RECOVERY') {
+                        const changePasswordOverlay = document.getElementById('changePasswordOverlay');
+                        if (changePasswordOverlay) changePasswordOverlay.style.display = 'flex';
                     }
                 });
 
@@ -2186,6 +2189,33 @@ async function initApp() {
             if (statusDiv) statusDiv.textContent = 'Loaded from Cache';
         };
     }
+}
+
+
+// Password Update Logic
+const updatePasswordBtn = document.getElementById('updatePasswordBtn');
+if (updatePasswordBtn) {
+    updatePasswordBtn.addEventListener('click', async () => {
+        const newPassword = document.getElementById('newPasswordInput').value;
+        const status = document.getElementById('passwordStatus');
+
+        if (!newPassword) {
+            status.textContent = 'Enter a password';
+            return;
+        }
+
+        status.textContent = 'Updating...';
+        const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+
+        if (error) {
+            status.textContent = 'Error: ' + error.message;
+        } else {
+            status.textContent = 'Password updated! Redirecting...';
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1500);
+        }
+    });
 }
 
 // Start App
