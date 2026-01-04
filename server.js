@@ -1060,7 +1060,8 @@ io.on('connection', async (socket) => {
             });
 
         if (error) {
-            socket.emit('nickname_error', 'Error upgrading nickname.');
+            console.error('Nickname Update Error:', error);
+            socket.emit('nickname_error', 'Error upgrading nickname: ' + error.message);
         } else {
             socket.name = newNick;
             socket.emit('nickname_success', newNick);
