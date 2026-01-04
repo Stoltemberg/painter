@@ -638,10 +638,11 @@ io.on('connection', async (socket) => {
     // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
     // (Moved to global scope above)
 
-    socket.emit('init', board); // Restored fallback execution
+    // socket.emit('init', board); // Disabled to prevent duplicate data transmission (Chunks used instead)
 
     // --- Socket Event Handlers ---
     socket.on('pixel', (data) => {
+        if (!data) return; // Prevention
         const state = updateInk(socket);
         if (state.ink < 1) {
             socket.emit('error_msg', 'Out of Ink!');
