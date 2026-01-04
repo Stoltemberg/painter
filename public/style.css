@@ -164,6 +164,17 @@ select {
     /* Smaller inputs */
 }
 
+/* Hide Spin Buttons */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+}
+
 #nicknameInput {
     width: 110px;
     text-align: center;
