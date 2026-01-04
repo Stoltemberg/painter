@@ -2142,10 +2142,61 @@ socket.on('auth_success', (data) => {
     if (profileBtn) {
         profileBtn.style.display = 'inline-block';
         if (loginBtn) loginBtn.style.display = 'none';
+
+        // Use nickname if available, else standard fallback
         profileBtn.textContent = data.name || 'Profile';
+
+        // Hide Guest Input when logged in
+        if (document.getElementById('nicknameInput')) {
+            document.getElementById('nicknameInput').style.display = 'none';
+        }
     }
     if (authOverlay) authOverlay.style.display = 'none';
     if (authStatus) authStatus.textContent = '';
+
+    // Check if nickname setup is needed (if name is null)
+    if (data.name === null) {
+        const setupOverlay = document.getElementById('nicknameSetupOverlay');
+        if (setupOverlay) setupOverlay.style.display = 'flex';
+    }
+});
+
+// Nickname Setup Logic
+const saveNicknameBtn = document.getElementById('saveNicknameBtn');
+if (saveNicknameBtn) {
+    saveNicknameBtn.addEventListener('click', () => {
+        const input = document.getElementById('setupNicknameInput');
+        const nick = input.value.trim();
+        if (nick.length < 3) return;
+
+        socket.emit('update_nickname', nick);
+        // We wait for success event to close
+    });
+}
+
+socket.on('nickname_success', (newNick) => {
+    // Update local state
+    if (profileBtn) profileBtn.textContent = newNick;
+    if (document.getElementById('nicknameSetupOverlay')) {
+        document.getElementById('nicknameSetupOverlay').style.display = 'none';
+    }
+    const status = document.getElementById('nicknameStatus');
+    if (status) status.textContent = 'Nickname updated!';
+
+    // Close profile overlay if open? No, keep it open if user was changing it there.
+    // Actually if it was setup overlay, it closed above.
+    // If it was profile overlay change:
+    const changeInput = document.getElementById('changeNicknameInput');
+    if (changeInput) changeInput.value = '';
+});
+
+socket.on('nickname_error', (msg) => {
+    const status = document.getElementById('nicknameStatus');
+    // Also check setup status div
+    const setupStatus = document.getElementById('setupNicknameStatus');
+
+    if (status && status.offsetParent !== null) status.textContent = msg;
+    if (setupStatus && setupStatus.offsetParent !== null) setupStatus.textContent = msg;
 });
 
 if (profileBtn) {
@@ -2184,6 +2235,20 @@ if (profileBtn) {
             document.getElementById('profilePixelCount').textContent = 'Error';
             document.getElementById('profileSessionCount').textContent = '-';
         }
+    });
+}
+
+
+const changeNicknameBtn = document.getElementById('changeNicknameBtn');
+if (changeNicknameBtn) {
+    changeNicknameBtn.addEventListener('click', () => {
+        const input = document.getElementById('changeNicknameInput');
+        const nick = input.value.trim();
+        if (nick.length < 3) {
+            document.getElementById('nicknameStatus').textContent = 'Min 3 chars.';
+            return;
+        }
+        socket.emit('update_nickname', nick);
     });
 }
 

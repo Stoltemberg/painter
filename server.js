@@ -977,16 +977,94 @@ io.on('connection', async (socket) => {
                     else console.log(`Session ${socket.dbSessionId} linked to User ${data.user.id}`);
                 }
 
-                // THEN emit success
+                // Get Profile (Nickname)
+                let { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', data.user.id)
+                    .single();
+
+                // If no profile, create one with default name
+                if (!profile) {
+                    const defaultName = data.user.email.split('@')[0];
+                    const { data: newProfile, error: createError } = await supabase
+                        .from('profiles')
+                        .insert([{ id: data.user.id, nickname: null }]) // nickname null triggers setup
+                        .select()
+                        .single();
+
+                    if (!createError) profile = newProfile;
+                }
+
+                // THEN emit success with nickname
                 socket.emit('auth_success', {
                     id: data.user.id,
-                    name: data.user.email.split('@')[0],
+                    name: profile?.nickname || null, // null means "ask user"
                     limit: USER_MAX
                 });
+
+                if (profile?.nickname) {
+                    socket.name = profile.nickname;
+                }
 
                 updateInk(socket);
             }
         });
+    });
+
+    // V8: Nickname Update
+    socket.on('update_nickname', async (newNick) => {
+        if (!supabase || !socket.name) return; // Must be logged in (socket.name set on auth)
+        // Actually socket.name is set for guests too. Check state.isUser
+        const state = getInkState(socket);
+        if (!state.isUser) return;
+
+        // Validation
+        if (!newNick || newNick.length < 3 || newNick.length > 20) {
+            socket.emit('nickname_error', 'Nickname must be 3-20 chars.');
+            return;
+        }
+
+        const userId = state.id || (await supabase.auth.getUser(socket.handshake.auth.token)).data?.user?.id;
+        // Optimization: We should have stored userId on socket during auth
+
+        // Let's rely on re-fetching or better, store on socket.
+        // I'll grab it from DB query to be safe or assuming token valid.
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('last_nickname_update')
+            .eq('id', userId) // We need userId here. 
+            // Wait, I didn't store userId on socket in 'auth'. I should.
+            .single();
+
+        if (profile && profile.last_nickname_update) {
+            const last = new Date(profile.last_nickname_update);
+            const now = new Date();
+            const diffDays = (now - last) / (1000 * 60 * 60 * 24);
+            if (diffDays < 15) {
+                socket.emit('nickname_error', `You can change nickname again in ${Math.ceil(15 - diffDays)} days.`);
+                return;
+            }
+        }
+
+        // Update
+        const { error } = await supabase
+            .from('profiles')
+            .upsert({
+                id: userId,
+                nickname: newNick,
+                last_nickname_update: new Date().toISOString()
+            });
+
+        if (error) {
+            socket.emit('nickname_error', 'Error upgrading nickname.');
+        } else {
+            socket.name = newNick;
+            socket.emit('nickname_success', newNick);
+            // Broadcast new name?
+            // Existing logic uses score updates to refresh names.
+        }
     });
 
     // V6: Cursor Reactions

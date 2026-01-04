@@ -175,23 +175,50 @@
                         </div>
                     </div>
                 </div>
-                <div class="auth-actions">
-                    <button id="signOutBtn" class="secondary-btn">Sign Out</button>
-                    <button id="closeProfileBtn" class="primary-btn">Close</button>
+            </div>
+
+            <div class="profile-actions" style="margin-bottom: 20px; text-align: left;">
+                <label style="font-size: 0.8rem; color: #888; display: block; margin-bottom: 5px;">Change
+                    Nickname</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="changeNicknameInput" placeholder="New Nickname" class="auth-input"
+                        style="flex: 1;" maxlength="20">
+                    <button id="changeNicknameBtn" class="secondary-btn" style="flex: 0 0 auto;">Update</button>
                 </div>
+                <div id="nicknameStatus" class="auth-status" style="margin-top: 5px; font-size: 0.8rem;"></div>
+            </div>
+
+            <div class="auth-actions">
+                <button id="signOutBtn" class="secondary-btn">Sign Out</button>
+                <button id="closeProfileBtn" class="primary-btn">Close</button>
             </div>
         </div>
-        <!-- Change Password Modal -->
-        <div id="changePasswordOverlay" class="auth-overlay" style="display: none;">
-            <div class="auth-box glass-panel">
-                <h2>Set New Password</h2>
-                <div class="auth-form">
-                    <input type="password" id="newPasswordInput" placeholder="New Password" class="auth-input">
-                    <button id="updatePasswordBtn" class="primary-btn">Update Password</button>
-                    <div id="passwordStatus" class="auth-status"></div>
-                </div>
+    </div>
+    <!-- Change Password Modal -->
+    <div id="changePasswordOverlay" class="auth-overlay" style="display: none;">
+        <div class="auth-box glass-panel">
+            <h2>Set New Password</h2>
+            <div class="auth-form">
+                <input type="password" id="newPasswordInput" placeholder="New Password" class="auth-input">
+                <button id="updatePasswordBtn" class="primary-btn">Update Password</button>
+                <div id="passwordStatus" class="auth-status"></div>
             </div>
         </div>
+    </div>
+
+    <!-- Nickname Setup Modal -->
+    <div id="nicknameSetupOverlay" class="auth-overlay" style="display: none;">
+        <div class="auth-box glass-panel">
+            <h2>Choose Your Nickname</h2>
+            <p style="font-size: 0.8rem; color: #aaa;">You can change this once every 15 days.</p>
+            <div class="auth-form">
+                <input type="text" id="setupNicknameInput" placeholder="Nickname (3-20 chars)" class="auth-input"
+                    maxlength="20">
+                <button id="saveNicknameBtn" class="primary-btn">Save Nickname</button>
+                <div id="setupNicknameStatus" class="auth-status"></div>
+            </div>
+        </div>
+    </div>
     </div>
 
     <canvas id="board"></canvas>
