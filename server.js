@@ -958,7 +958,7 @@ io.on('connection', async (socket) => {
     socket.on('auth', (token) => {
         if (!token || !supabase) return;
 
-        supabase.auth.getUser(token).then(({ data, error }) => {
+        supabase.auth.getUser(token).then(async ({ data, error }) => {
             if (!error && data.user) {
                 const state = getInkState(socket);
                 if (!state.isUser) {
@@ -966,22 +966,18 @@ io.on('connection', async (socket) => {
                     state.ink = USER_MAX;
                     state.ink = Math.max(state.ink, USER_MAX);
                 }
-                socket.emit('auth_success', {
-                    name: data.user.email.split('@')[0],
-                    limit: USER_MAX
-                });
 
-                // Link Session to User
+                // Link Session to User FIRST
                 if (socket.dbSessionId) {
-                    supabase.from('sessions')
+                    const { error: linkError } = await supabase.from('sessions')
                         .update({ user_id: data.user.id })
-                        .eq('id', socket.dbSessionId)
-                        .then(({ error }) => {
-                            if (error) console.error('Error linking session to user:', error.message);
-                            else console.log(`Session ${socket.dbSessionId} linked to User ${data.user.id}`);
-                        });
+                        .eq('id', socket.dbSessionId);
+
+                    if (linkError) console.error('Error linking session to user:', linkError.message);
+                    else console.log(`Session ${socket.dbSessionId} linked to User ${data.user.id}`);
                 }
 
+                // THEN emit success
                 socket.emit('auth_success', {
                     id: data.user.id,
                     name: data.user.email.split('@')[0],
