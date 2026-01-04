@@ -310,6 +310,33 @@ app.post('/api/admin/save', basicAuth, async (req, res) => {
     res.json({ success: true, message: 'Save triggered successfully.' });
 });
 
+// --- Public Stats API ---
+app.get('/api/stats/user/:id', async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Database unavailable' });
+    const { id } = req.params;
+
+    // 1. Get all sessions for this user
+    const { data: sessions, error: sessionError } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('user_id', id);
+
+    if (sessionError || !sessions) return res.json({ pixel_count: 0 });
+
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length === 0) return res.json({ pixel_count: 0 });
+
+    // 2. Count strokes for these sessions
+    const { count, error: countError } = await supabase
+        .from('strokes')
+        .select('*', { count: 'exact', head: true })
+        .in('session_id', sessionIds);
+
+    if (countError) return res.status(500).json({ error: countError.message });
+
+    res.json({ pixel_count: count, session_count: sessions.length });
+});
+
 // Zones Persistence
 const ZONES_FILE = path.join(__dirname, 'zones.json');
 let protectedZones = [];
@@ -943,6 +970,24 @@ io.on('connection', async (socket) => {
                     name: data.user.email.split('@')[0],
                     limit: USER_MAX
                 });
+
+                // Link Session to User
+                if (socket.dbSessionId) {
+                    supabase.from('sessions')
+                        .update({ user_id: data.user.id })
+                        .eq('id', socket.dbSessionId)
+                        .then(({ error }) => {
+                            if (error) console.error('Error linking session to user:', error.message);
+                            else console.log(`Session ${socket.dbSessionId} linked to User ${data.user.id}`);
+                        });
+                }
+
+                socket.emit('auth_success', {
+                    id: data.user.id,
+                    name: data.user.email.split('@')[0],
+                    limit: USER_MAX
+                });
+
                 updateInk(socket);
             }
         });

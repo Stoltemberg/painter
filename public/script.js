@@ -2097,6 +2097,59 @@ if (coordsDiv) {
 
 // (Duplicate showReaction and keydown listener removed)
 
+// --- Profile Logic ---
+let currentUserId = null;
+const profileBtn = document.getElementById('profileBtn');
+const profileOverlay = document.getElementById('profileOverlay');
+const closeProfileBtn = document.getElementById('closeProfileBtn');
+const signOutBtn = document.getElementById('signOutBtn');
+
+socket.on('auth_success', (data) => {
+    currentUserId = data.id;
+    if (profileBtn) {
+        profileBtn.style.display = 'inline-block';
+        if (loginBtn) loginBtn.style.display = 'none';
+        profileBtn.textContent = data.name || 'Profile';
+    }
+    if (authOverlay) authOverlay.style.display = 'none';
+    if (authStatus) authStatus.textContent = '';
+});
+
+if (profileBtn) {
+    profileBtn.addEventListener('click', async () => {
+        if (!currentUserId || !profileOverlay) return;
+
+        profileOverlay.style.display = 'flex';
+        document.getElementById('profileName').textContent = 'Loading...';
+
+        try {
+            const res = await fetch(`/api/stats/user/${currentUserId}`);
+            const stats = await res.json();
+
+            document.getElementById('profileName').textContent = document.getElementById('nicknameInput').value;
+            document.getElementById('profilePixelCount').textContent = stats.pixel_count || 0;
+            document.getElementById('profileSessionCount').textContent = stats.session_count || 0;
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('profilePixelCount').textContent = 'Error';
+        }
+    });
+}
+
+if (closeProfileBtn) {
+    closeProfileBtn.addEventListener('click', () => {
+        profileOverlay.style.display = 'none';
+    });
+}
+
+if (signOutBtn) {
+    signOutBtn.addEventListener('click', async () => {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+        location.reload();
+    });
+}
+
 // --- Initialization ---
 async function initApp() {
     await initSupabase();

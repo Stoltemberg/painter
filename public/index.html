@@ -41,6 +41,7 @@
                     <option value="blue">🔵 Team Blue</option>
                     <option value="green">🟢 Team Green</option>
                 </select>
+                <button id="profileBtn" class="login-compact-btn" style="display: none;">Profile</button>
                 <button id="loginBtn" class="login-compact-btn">Log In</button>
             </div>
         </div>
@@ -153,6 +154,30 @@
                     <div id="authStatus" class="auth-status"></div>
                 </div>
                 <button id="closeAuthBtn" class="close-auth">Start as Guest</button>
+            </div>
+        </div>
+
+        <!-- Profile Modal -->
+        <div id="profileOverlay" class="auth-overlay" style="display: none;">
+            <div class="auth-box glass-panel">
+                <h2>User Profile</h2>
+                <div class="profile-stats">
+                    <p>User: <span id="profileName">...</span></p>
+                    <div class="stat-row">
+                        <div class="stat-card">
+                            <h3>Pixels</h3>
+                            <span id="profilePixelCount">Loading...</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Sessions</h3>
+                            <span id="profileSessionCount">...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="auth-actions">
+                    <button id="signOutBtn" class="secondary-btn">Sign Out</button>
+                    <button id="closeProfileBtn" class="primary-btn">Close</button>
+                </div>
             </div>
         </div>
     </div>
