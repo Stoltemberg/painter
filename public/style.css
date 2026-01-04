@@ -1,45 +1,43 @@
 /* --- GLOBAL & TYPOGRAPHY --- */
 :root {
-    /* Aurora Dark Theme (Default) */
+    /* Aurora Premium Theme */
     --bg-primary: #0f172a;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
 
-    --glass-bg: rgba(15, 23, 42, 0.75);
+    /* Advanced Glass */
+    --glass-bg: rgba(10, 15, 30, 0.65);
     --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-highlight: rgba(255, 255, 255, 0.15);
+    /* Minimal border */
+    --glass-highlight: rgba(255, 255, 255, 0.1);
+    --backdrop: blur(24px) saturate(140%);
 
     --accent: #38bdf8;
-    --accent-glow: rgba(56, 189, 248, 0.5);
+    --accent-glow: rgba(56, 189, 248, 0.4);
     --danger: #f43f5e;
-    --success: #10b981;
-    --warning: #f59e0b;
 
-    --font-main: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-main: 'Outfit', 'Inter', sans-serif;
+
+    /* Rounded & Smooth */
     --radius-sm: 8px;
     --radius-md: 16px;
     --radius-lg: 24px;
+    --radius-xl: 32px;
     --radius-full: 9999px;
 
-    --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
-    --shadow-glow: 0 0 20px var(--accent-glow);
-
-    --backdrop: blur(20px);
+    --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 25px var(--accent-glow);
 }
 
 .light-mode {
-    --bg-primary: #e0f2fe;
-    /* Soft Sky */
+    --bg-primary: #f0f9ff;
     --text-primary: #0f172a;
-    --text-secondary: #475569;
-
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --glass-border: rgba(255, 255, 255, 0.6);
-    --glass-highlight: rgba(255, 255, 255, 0.9);
-
-    --accent: #0284c7;
-    --accent-glow: rgba(2, 132, 199, 0.3);
+    --text-secondary: rgba(15, 23, 42, 0.6);
+    --glass-bg: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --glass-highlight: rgba(255, 255, 255, 0.8);
+    --accent: #0ea5e9;
 }
 
 * {
@@ -59,25 +57,10 @@ html {
     background-color: var(--bg-primary);
 }
 
-/* Aurora Animation Background */
+/* Deeper Aurora Animation */
 body {
-    background: linear-gradient(-45deg, #020617, #0f172a, #1e1b4b, #172554);
-    background-size: 400% 400%;
-    animation: aurora 20s ease infinite;
-}
-
-@keyframes aurora {
-    0% {
-        background-position: 0% 50%;
-    }
-
-    50% {
-        background-position: 100% 50%;
-    }
-
-    100% {
-        background-position: 0% 50%;
-    }
+    background: radial-gradient(circle at 50% 50%, #1e293b 0%, #020617 100%);
+    background-size: 200% 200%;
 }
 
 #board {
@@ -100,13 +83,7 @@ body {
     justify-content: space-between;
 }
 
-.hidden-ui {
-    opacity: 0;
-    pointer-events: none !important;
-    transition: opacity 0.3s ease;
-}
-
-/* --- GLASS COMPONENTS --- */
+/* --- ADVANCED GLASS COMPONENTS --- */
 .glass-group,
 .glass-panel,
 .palette,
@@ -120,21 +97,21 @@ body {
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-sm);
     pointer-events: auto;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+        background 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
 }
 
+/* Hover Lift Effect */
 .glass-group:hover,
+.palette:hover,
 .leaderboard:hover,
 .minimap-container:hover {
-    border-color: var(--glass-highlight);
+    border-color: rgba(255, 255, 255, 0.15);
     box-shadow: var(--shadow-lg);
-    transform: translateY(-2px);
-}
-
-.palette:hover {
-    border-color: var(--glass-highlight);
-    box-shadow: var(--shadow-lg);
-    transform: translateX(-50%) translateY(-2px);
+    background: rgba(20, 30, 50, 0.7);
+    /* Slightly darker on interaction */
 }
 
 /* --- TOP BAR --- */
@@ -143,32 +120,36 @@ body {
     gap: 16px;
     align-items: flex-start;
     flex-wrap: wrap;
+    padding: 8px;
+    /* Breathing room */
 }
 
 .glass-group {
-    border-radius: var(--radius-full);
-    padding: 8px 16px;
+    border-radius: var(--radius-xl);
+    padding: 2px 14px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    height: 48px;
+    gap: 10px;
+    height: 36px;
+    /* Reduced further */
 }
 
 .coords,
 .online-count {
-    font-weight: 700;
-    font-size: 0.9rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    /* Smaller text */
     letter-spacing: 0.5px;
-    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
 }
 
 .divider {
     width: 1px;
-    height: 20px;
-    background: var(--glass-border);
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
 }
 
-/* Input Fields */
+/* Minimalist Inputs */
 input[type="text"],
 input[type="number"],
 select {
@@ -176,53 +157,58 @@ select {
     border: none;
     color: var(--text-primary);
     font-family: inherit;
-    font-weight: 600;
+    font-weight: 500;
     outline: none;
-}
-
-input::placeholder {
-    color: var(--text-secondary);
+    transition: border-bottom 0.2s;
+    font-size: 0.8rem;
+    /* Smaller inputs */
 }
 
 #nicknameInput {
-    width: 100px;
-    font-size: 0.95rem;
+    width: 110px;
+    text-align: center;
 }
 
-#nicknameInput:focus,
-#nicknameInput:hover {
-    color: var(--accent);
+#nicknameInput:focus {
+    border-bottom: 2px solid var(--accent);
 }
 
-/* Team Selector */
 .team-select {
-    color: var(--text-primary);
-    cursor: pointer;
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 6px;
-    padding: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 10px;
     border: 1px solid transparent;
 }
 
 .team-select:hover {
-    border-color: var(--glass-border);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 .team-select option {
-    background: #0f172a;
+    background-color: var(--bg-primary);
+    /* Dark background */
+    color: var(--text-primary);
+    padding: 8px;
 }
 
-/* Ink Widget */
+/* Ink Widget (Compact) */
 .ink-widget {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 0 4px;
 }
 
+.ink-icon {
+    font-size: 0.9rem;
+}
+
+/* Smaller Icon */
 .ink-bar-compact {
-    width: 60px;
-    height: 6px;
+    width: 40px;
+    /* Reduced width */
+    height: 4px;
+    /* Thinner */
     background: rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-full);
     overflow: hidden;
@@ -230,64 +216,62 @@ input::placeholder {
 
 .ink-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
     width: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
     transition: width 0.3s ease;
 }
 
 .ink-text {
-    font-size: 0.8rem;
-    font-weight: 800;
+    font-size: 0.75rem;
+    /* Smaller text */
+    font-weight: 700;
     color: var(--accent);
 }
 
-/* Login Button */
-.login-compact-btn {
-    background: var(--accent);
-    color: #0f172a;
-    border: none;
-    padding: 6px 16px;
-    border-radius: var(--radius-full);
-    font-weight: 700;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
-}
-
-.login-compact-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 15px var(--accent-glow);
-}
-
-/* --- BOTTOM DOCK (PALETTE) --- */
+/* --- PURE FLOATING DOCK (PALETTE) --- */
 .palette {
     position: absolute;
-    bottom: 32px;
+    bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 12px 24px;
-    border-radius: 20px;
+    padding: 10px 16px;
+    border-radius: var(--radius-xl);
     display: flex;
     align-items: center;
     gap: 24px;
-    /* Dock Hover Animation is handled by generic glass hover */
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
 }
 
-/* Color Picker */
+.colors-section,
+.tools-section,
+.view-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 8px;
+}
+
+/* Color Picker Minimal */
 #colorPicker {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    border: 3px solid var(--glass-border);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     padding: 0;
     background: none;
     cursor: pointer;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 #colorPicker:hover {
-    transform: scale(1.1) rotate(90deg);
+    transform: scale(1.1);
     border-color: var(--accent);
 }
 
@@ -300,117 +284,81 @@ input::placeholder {
     border-radius: 50%;
 }
 
-/* Recent Colors */
-.recent-colors {
-    display: flex;
-    gap: 8px;
-}
-
-.recent-color-swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    cursor: pointer;
-    border: 2px solid var(--glass-border);
-    transition: transform 0.2s;
-}
-
-.recent-color-swatch:hover {
-    transform: translateY(-4px);
-    border-color: var(--text-primary);
-}
-
-/* Tools */
+/* --- BUTTONS MINIMALIST --- */
 .tools {
     display: flex;
+    gap: 32px;
+    align-items: center;
+}
+
+.tools .glass-group {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0;
+    height: auto;
     gap: 12px;
 }
 
+.tool-btn,
 .tools button {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
+    background: transparent;
+    border: 1px solid transparent;
+    /* Invisible border for layout stability */
     color: var(--text-secondary);
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-    font-size: 1.25rem;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 1.2rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-    position: relative;
-    overflow: hidden;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Hover: Subtle light wash */
+.tool-btn:hover,
 .tools button:hover {
-    background: var(--glass-highlight);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    border-color: var(--accent);
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
-.tools button:active,
-.tools button.active {
-    transform: translateY(0);
+/* Active: Glowing Accent */
+.tool-btn.active,
+.tools button:active {
     background: var(--accent);
     color: #0f172a;
-    border-color: var(--accent);
-    box-shadow: 0 0 15px var(--accent-glow);
+    box-shadow: 0 4px 15px var(--accent-glow);
+    transform: translateY(0) scale(1.05);
 }
 
-/* Tooltips */
-.tools button:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%) translateY(-8px);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    white-space: nowrap;
-    opacity: 0;
-    animation: fadein 0.2s forwards;
-    pointer-events: none;
-}
-
-/* Active Tool highlight helper (if we added .active class in JS, but borders work too) */
-
-/* Teleport Bar */
+/* Teleport Bar Minimal */
 .teleport-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding-left: 20px;
-    border-left: 1px solid var(--glass-border);
+    gap: 6px;
+    padding-left: 16px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .teleport-bar input {
-    width: 50px;
+    width: 46px;
     background: rgba(0, 0, 0, 0.2);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 4px;
     text-align: center;
-    font-size: 0.8rem;
-}
-
-.teleport-bar input:focus {
-    background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 0 0 2px var(--accent);
 }
 
 #teleBtn {
-    background: var(--glass-highlight);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
     border: none;
-    color: var(--text-primary);
-    padding: 4px 12px;
-    border-radius: 6px;
     font-weight: 600;
-    font-size: 0.8rem;
     cursor: pointer;
 }
 
@@ -492,10 +440,12 @@ input::placeholder {
 /* --- CHAT --- */
 #chat-container {
     position: absolute;
-    bottom: 32px;
+    bottom: 60px;
+    /* Lifted for instructions */
     left: 24px;
     width: 300px;
-    height: 300px;
+    height: 250px;
+    /* Slightly shorter */
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -540,15 +490,42 @@ input::placeholder {
 }
 
 /* --- EXTRA UI --- */
+/* Login Button */
+.login-compact-btn {
+    background: var(--accent);
+    color: #0f172a;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.login-compact-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+/* --- EXTRA UI --- */
 .instructions {
     position: absolute;
-    top: 80px;
+    bottom: 12px;
     left: 24px;
-    max-width: 250px;
+    max-width: 400px;
     color: var(--text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.4;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    font-size: 0.75rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    background: transparent;
+    /* Remove bg to be cleaner */
+    padding: 0;
+    border-radius: 0;
+    backdrop-filter: none;
+    pointer-events: none;
+    /* Click through */
+    opacity: 0.7;
 }
 
 #status {
@@ -679,6 +656,7 @@ input::placeholder {
 /* Range Input Styling */
 input[type=range] {
     -webkit-appearance: none;
+    appearance: none;
     background: transparent;
 }
 
