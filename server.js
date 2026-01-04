@@ -1014,9 +1014,11 @@ io.on('connection', async (socket) => {
 
     // V8: Nickname Update
     socket.on('update_nickname', async (newNick) => {
-        if (!supabase || !socket.name) return; // Must be logged in (socket.name set on auth)
-        // Actually socket.name is set for guests too. Check state.isUser
+        if (!supabase) return;
+
         const state = getInkState(socket);
+        // helper check if authenticated
+        // Actually, valid Supabase user has state.isUser = true
         if (!state.isUser) return;
 
         // Validation

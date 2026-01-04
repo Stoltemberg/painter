@@ -2167,7 +2167,11 @@ if (saveNicknameBtn) {
     saveNicknameBtn.addEventListener('click', () => {
         const input = document.getElementById('setupNicknameInput');
         const nick = input.value.trim();
-        if (nick.length < 3) return;
+        if (nick.length < 3) {
+            const status = document.getElementById('setupNicknameStatus');
+            if (status) status.textContent = 'Min 3 chars.';
+            return;
+        }
 
         socket.emit('update_nickname', nick);
         // We wait for success event to close
