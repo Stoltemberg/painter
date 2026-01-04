@@ -1551,16 +1551,17 @@ async function initSupabase() {
                     throw new Error('createClient not found in global supabase object');
                 }
 
-                // Check Session
-                const { data } = await supabaseClient.auth.getSession();
-                if (data?.session?.user) {
-                    handleUser(data.session.user);
-                }
-
-                // Auth Listener
+                // Auth Listener - Register BEFORE getSession to catch initial events properly
                 supabaseClient.auth.onAuthStateChange((event, session) => {
                     console.log('Auth State Change:', event);
-                    if (event === 'SIGNED_IN' && session?.user) {
+
+                    if (event === 'PASSWORD_RECOVERY') {
+                        const changePasswordOverlay = document.getElementById('changePasswordOverlay');
+                        if (changePasswordOverlay) {
+                            changePasswordOverlay.style.display = 'flex';
+                            console.log('Opening Password Recovery Overlay');
+                        }
+                    } else if (event === 'SIGNED_IN' && session?.user) {
                         handleUser(session.user);
                         if (authOverlay) authOverlay.style.display = 'none';
                         if (loginBtn) {
@@ -1568,14 +1569,23 @@ async function initSupabase() {
                             loginBtn.onclick = () => supabaseClient.auth.signOut();
                         }
                     } else if (event === 'SIGNED_OUT') {
-                        // Reset to Guest
-                        localStorage.removeItem('painter_nickname'); // Optional clear
+                        localStorage.removeItem('painter_nickname');
                         window.location.reload();
-                    } else if (event === 'PASSWORD_RECOVERY') {
-                        const changePasswordOverlay = document.getElementById('changePasswordOverlay');
-                        if (changePasswordOverlay) changePasswordOverlay.style.display = 'flex';
                     }
                 });
+
+                // Check URL for recovery explicitly as fallback
+                if (window.location.hash.includes('type=recovery')) {
+                    console.log('Recovery hash detected!');
+                    const changePasswordOverlay = document.getElementById('changePasswordOverlay');
+                    if (changePasswordOverlay) changePasswordOverlay.style.display = 'flex';
+                }
+
+                // Check Session
+                const { data } = await supabaseClient.auth.getSession();
+                if (data?.session?.user) {
+                    handleUser(data.session.user);
+                }
 
             } catch (err) {
                 console.error('Supabase Init Logic Error:', err);
