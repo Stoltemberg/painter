@@ -14,6 +14,8 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { createClient } = require('@supabase/supabase-js');
+const { createClient: createRedisClient } = require('redis');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 const PORT = process.env.PORT || 3000;
 const BOARD_FILE = path.join(__dirname, 'board.dat');
@@ -531,7 +533,77 @@ const getCompressedBoard = () => {
     cachedCompressedBoard = zlib.gzipSync(board);
     lastCompressionTime = now;
     return cachedCompressedBoard;
+    return cachedCompressedBoard;
 };
+
+// --- Redis & Sync Logic ---
+let syncPub = null;
+
+function updateBoardPixel(x, y, r, g, b) {
+    const index = (y * BOARD_WIDTH + x) * 3;
+    if (index < board.length && index >= 0) {
+        board[index] = r;
+        board[index + 1] = g;
+        board[index + 2] = b;
+        needsSave = true;
+    }
+}
+
+async function initRedis() {
+    if (process.env.REDIS_URL) {
+        console.log('Initializing Redis Adapter...');
+        try {
+            const pubClient = createRedisClient({ url: process.env.REDIS_URL });
+            const subClient = pubClient.duplicate();
+
+            pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
+            subClient.on('error', (err) => console.error('Redis Sub Error:', err));
+
+            await Promise.all([pubClient.connect(), subClient.connect()]);
+
+            io.adapter(createAdapter(pubClient, subClient));
+
+            // Sync Channel
+            syncPub = pubClient;
+            const syncSub = pubClient.duplicate();
+            syncSub.on('error', (err) => console.error('Redis Sync Error:', err));
+            await syncSub.connect();
+
+            await syncSub.subscribe('board_sync', (message) => {
+                try {
+                    const payload = JSON.parse(message);
+                    if (payload.t === 'p') {
+                        const b = Buffer.from(payload.d, 'base64');
+                        if (b.length >= 7) {
+                            const x = b.readUInt16LE(0);
+                            const y = b.readUInt16LE(2);
+                            const r = b.readUInt8(4);
+                            const g = b.readUInt8(5);
+                            const b2 = b.readUInt8(6);
+                            updateBoardPixel(x, y, r, g, b2);
+                        }
+                    } else if (payload.t === 'b') {
+                        const buffers = payload.d.map(s => Buffer.from(s, 'base64'));
+                        for (const b of buffers) {
+                            if (b.length >= 7) {
+                                const x = b.readUInt16LE(0);
+                                const y = b.readUInt16LE(2);
+                                const r = b.readUInt8(4);
+                                const g = b.readUInt8(5);
+                                const b2 = b.readUInt8(6);
+                                updateBoardPixel(x, y, r, g, b2);
+                            }
+                        }
+                    }
+                } catch (e) { console.error('Redis Sync processing error', e); }
+            });
+            console.log('Redis Adapter & Sync Configured.');
+        } catch (e) {
+            console.error('Redis Init Failed:', e);
+        }
+    }
+}
+initRedis();
 
 io.on('connection', async (socket) => {
     // console.log('A user connected');
@@ -697,6 +769,10 @@ io.on('connection', async (socket) => {
             bBuf.writeUInt8(tid, 7);
 
             socket.broadcast.emit('pixel', bBuf);
+
+            if (syncPub) {
+                syncPub.publish('board_sync', JSON.stringify({ t: 'p', d: bBuf.toString('base64') }));
+            }
             if (TEAMS[tid]) teamScores[TEAMS[tid]]++;
 
             if (!socket.pixelScore) socket.pixelScore = 0;
@@ -816,6 +892,11 @@ io.on('connection', async (socket) => {
             }
             const finalBuf = Buffer.concat(bufList);
             socket.broadcast.emit('batch_pixels', finalBuf);
+
+            if (syncPub) {
+                const b64List = bufList.map(b => b.toString('base64'));
+                syncPub.publish('board_sync', JSON.stringify({ t: 'b', d: b64List }));
+            }
 
             saveTeamScores(); // Save after batch update
 
