@@ -402,6 +402,26 @@ if (signUpBtn) {
     });
 }
 
+const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+if (forgotPasswordBtn) {
+    forgotPasswordBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const email = emailInput.value;
+        if (!email) {
+            authStatus.textContent = 'Please enter your email first.';
+            return;
+        }
+
+        authStatus.textContent = 'Sending reset link...';
+        const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin, // Adjust if needed
+        });
+
+        if (error) authStatus.textContent = 'Error: ' + error.message;
+        else authStatus.textContent = 'Check email for reset link!';
+    });
+}
+
 if (closeAuthBtn) {
     closeAuthBtn.addEventListener('click', () => {
         if (authOverlay) authOverlay.style.display = 'none';
