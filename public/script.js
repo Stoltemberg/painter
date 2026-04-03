@@ -370,9 +370,8 @@ if (overlayOpacitySlider) {
 }
 
 // === AUTO-PAINT SYSTEM ===
-const AUTO_PAINT_MAX_DIM = 200; // Max 200x200 pixels
-const AUTO_PAINT_BATCH_SIZE = 50; // Pixels per socket emit
-const AUTO_PAINT_BATCH_DELAY = 100; // ms between batches
+const AUTO_PAINT_BATCH_SIZE = 200; // Pixels per socket emit
+const AUTO_PAINT_BATCH_DELAY = 50; // ms between batches
 const AUTO_PAINT_ALPHA_THRESHOLD = 128; // Skip semi-transparent pixels
 let isAutoPainting = false;
 
@@ -404,16 +403,9 @@ async function autoPaintOverlay(overlayId) {
     updateAutoPaintUI(0, 'Reading pixels...');
 
     try {
-        // Calculate target dimensions (cap at MAX_DIM)
+        // Calculate target dimensions (no cap — unlimited)
         let targetW = Math.round(ov.img.naturalWidth * ov.scale);
         let targetH = Math.round(ov.img.naturalHeight * ov.scale);
-
-        // Cap dimensions
-        if (targetW > AUTO_PAINT_MAX_DIM || targetH > AUTO_PAINT_MAX_DIM) {
-            const ratio = Math.min(AUTO_PAINT_MAX_DIM / targetW, AUTO_PAINT_MAX_DIM / targetH);
-            targetW = Math.round(targetW * ratio);
-            targetH = Math.round(targetH * ratio);
-        }
 
         if (targetW < 1 || targetH < 1) {
             showToast('Overlay too small to paint', 'error');
@@ -460,12 +452,7 @@ async function autoPaintOverlay(overlayId) {
             return;
         }
 
-        // Check ink
-        const inkNeeded = pixels.length;
-        if (ink < inkNeeded) {
-            showToast(`Not enough ink! Need ${inkNeeded}, have ${Math.floor(ink)}`, 'error');
-            return;
-        }
+        // No ink limit — unlimited painting
 
         updateAutoPaintUI(0, `Painting ${pixels.length} pixels...`);
 
@@ -502,10 +489,6 @@ async function autoPaintOverlay(overlayId) {
 
             // Emit to server
             socket.emit('batch_pixels', batch);
-
-            // Deduct ink
-            ink -= batch.length;
-            if (inkValue) inkValue.textContent = Math.floor(ink);
 
             // Update progress
             batchIndex++;
