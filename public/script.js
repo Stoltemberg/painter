@@ -102,10 +102,13 @@ const lineBtn = document.getElementById('lineBtn');
 const exportBtn = document.getElementById('exportBtn');
 const viewModeBtn = document.getElementById('viewModeBtn');
 const soundBtn = document.getElementById('soundBtn');
+const deleteOverlayBtn = document.getElementById('deleteOverlayBtn');
+const clearOverlaysBtn = document.getElementById('clearOverlaysBtn');
+const overlayOpacitySlider = document.getElementById('overlayOpacitySlider');
+const overlayOpacityValue = document.getElementById('overlayOpacityValue');
 
 // View Mode State
 let isRestrictedView = false;
-// ... other DOM elements ...
 
 // Stamp Shapes (Relative Coordinates)
 const STAMPS = {
@@ -198,6 +201,16 @@ window.addEventListener('keydown', (e) => {
         case 's': setTool('stamp'); break;
         case 'o': setTool('overlay'); break;
         case 'g': if (gridBtn) gridBtn.click(); break;
+        case 'Delete':
+        case 'Backspace':
+            if (currentMode === 'overlay' && selectedOverlayId) {
+                e.preventDefault();
+                socket.emit('delete_overlay', selectedOverlayId);
+                selectedOverlayId = null;
+                if (deleteOverlayBtn) deleteOverlayBtn.disabled = true;
+                needsRedraw = true;
+            }
+            break;
     }
 });
 
@@ -232,107 +245,122 @@ canvas.addEventListener('drop', async (e) => {
     }
 });
 
+// === Overlay Upload System (Unified) ===
+const OVERLAY_MAX_SIZE = 2 * 1024 * 1024; // 2MB
+
+function validateOverlayFile(file) {
+    if (!file.type.startsWith('image/')) {
+        showToast('Only image files are allowed', 'error');
+        return false;
+    }
+    if (file.size > OVERLAY_MAX_SIZE) {
+        showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 2MB`, 'error');
+        return false;
+    }
+    return true;
+}
+
 async function handleFileUpload(file, targetX, targetY) {
+    if (!validateOverlayFile(file)) return;
+    if (!supabaseClient) {
+        showToast('Supabase connection required for uploads', 'error');
+        return;
+    }
+
     const originalText = statusDiv ? statusDiv.textContent : '';
     if (statusDiv) statusDiv.textContent = 'Uploading Overlay...';
+    if (placeOverlayBtn) placeOverlayBtn.disabled = true;
 
     try {
-        const fileExt = file.name.split('.').pop();
+        const fileExt = file.name.split('.').pop().toLowerCase();
         const fileName = `overlay_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `overlays/${fileName}`;
 
-        // 1. Upload
-        if (!supabaseClient) throw new Error("Supabase not initialized");
+        // Upload to Supabase Storage
         const { data, error } = await supabaseClient.storage
             .from('pixel-board')
-            .upload(filePath, file);
+            .upload(filePath, file, { contentType: file.type });
 
         if (error) throw error;
 
-        // 2. Get URL
+        // Get public URL (bucket must be public)
         const { data: { publicUrl } } = supabaseClient.storage
             .from('pixel-board')
             .getPublicUrl(filePath);
 
-        // 3. Emit simple placement
+        // Emit placement
         socket.emit('place_overlay', {
             url: publicUrl,
-            x: targetX,
-            y: targetY,
+            x: Math.max(0, Math.floor(targetX)),
+            y: Math.max(0, Math.floor(targetY)),
             scale: 1.0,
             owner: myNickname
         });
 
-        if (statusDiv) statusDiv.textContent = 'Overlay Placed!';
-        setTimeout(() => { if (statusDiv) statusDiv.textContent = originalText; }, 2000);
-
-        // Switch to tool
-        if (overlayBtn) overlayBtn.click();
+        showToast('Overlay placed!', 'success');
+        setTool('overlay'); // Switch to overlay tool
 
     } catch (err) {
-        console.error("Upload failed", err);
-        alert("Upload failed: " + err.message);
-        if (statusDiv) statusDiv.textContent = 'Upload Error';
+        console.error('Upload failed:', err);
+        showToast('Upload failed: ' + err.message, 'error');
+    } finally {
+        if (statusDiv) statusDiv.textContent = originalText;
+        if (placeOverlayBtn) placeOverlayBtn.disabled = false;
     }
 }
 
-// cancelOverlayBtn listener removed
+// --- Overlay Control Handlers ---
 
-
+// Upload button → triggers hidden file input
 if (placeOverlayBtn) {
     placeOverlayBtn.addEventListener('click', () => {
-        overlayInput.click(); // Trigger hidden file input
+        if (overlayInput) overlayInput.click();
     });
 }
 
+// File input → unified upload at viewport center
 if (overlayInput) {
-    overlayInput.addEventListener('change', async () => {
+    overlayInput.addEventListener('change', () => {
         const file = overlayInput.files[0];
         if (!file) return;
 
-        if (!supabaseClient) {
-            alert('Supabase connection required.');
-            return;
+        // Center on current viewport
+        const centerX = offsetX;
+        const centerY = offsetY;
+
+        handleFileUpload(file, centerX, centerY);
+        overlayInput.value = ''; // Reset for re-upload of same file
+    });
+}
+
+// Delete selected overlay
+if (deleteOverlayBtn) {
+    deleteOverlayBtn.addEventListener('click', () => {
+        if (selectedOverlayId) {
+            socket.emit('delete_overlay', selectedOverlayId);
+            selectedOverlayId = null;
+            deleteOverlayBtn.disabled = true;
+            needsRedraw = true;
         }
+    });
+}
 
-        const originalText = placeOverlayBtn ? placeOverlayBtn.textContent : '';
-        if (placeOverlayBtn) placeOverlayBtn.textContent = 'Uploading...';
-
-        try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `overlay_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-            const filePath = `overlays/${fileName}`;
-
-            const { data, error } = await supabaseClient.storage
-                .from('pixel-board')
-                .upload(filePath, file);
-
-            if (error) throw error;
-
-            const { data: { publicUrl } } = supabaseClient.storage
-                .from('pixel-board')
-                .getPublicUrl(filePath);
-
-            // Center on screen
-            const x = Math.floor(offsetX + (canvas.width / 2) / scale - 150); // Rough center
-            const y = Math.floor(offsetY + (canvas.height / 2) / scale - 150);
-
-            socket.emit('place_overlay', {
-                url: publicUrl,
-                x: x > 0 ? x : 0,
-                y: y > 0 ? y : 0,
-                scale: 1.0,
-                owner: myNickname
-            });
-
-            alert('Overlay placed!');
-        } catch (err) {
-            console.error(err);
-            alert('Upload Error: ' + err.message);
-        } finally {
-            if (placeOverlayBtn) placeOverlayBtn.textContent = 'Upload New';
-            overlayInput.value = '';
+// Clear all overlays
+if (clearOverlaysBtn) {
+    clearOverlaysBtn.addEventListener('click', () => {
+        if (activeOverlays.length === 0) return;
+        if (confirm('Remove all overlays?')) {
+            socket.emit('clear_overlays');
         }
+    });
+}
+
+// Opacity slider
+if (overlayOpacitySlider) {
+    overlayOpacitySlider.addEventListener('input', (e) => {
+        overlayOpacity = parseInt(e.target.value) / 100;
+        if (overlayOpacityValue) overlayOpacityValue.textContent = `${e.target.value}%`;
+        needsRedraw = true;
     });
 }
 
@@ -1071,6 +1099,7 @@ canvas.addEventListener('mousedown', e => {
 
         if (hit) {
             selectedOverlayId = hit.id;
+            if (deleteOverlayBtn) deleteOverlayBtn.disabled = false;
             const ov = activeOverlays.find(o => o.id === hit.id);
 
             overlayDragStart = { x, y };
@@ -1094,6 +1123,7 @@ canvas.addEventListener('mousedown', e => {
             return; // Consume
         } else {
             selectedOverlayId = null;
+            if (deleteOverlayBtn) deleteOverlayBtn.disabled = true;
             needsRedraw = true;
         }
         return;

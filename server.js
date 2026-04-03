@@ -1105,13 +1105,26 @@ io.on('connection', async (socket) => {
         // data: { url, x, y, scale, owner }
         if (!data || !data.url) return;
 
+        // URL validation: only allow Supabase storage URLs
+        const allowedDomain = supabaseUrl ? new URL(supabaseUrl).hostname : null;
+        try {
+            const urlObj = new URL(data.url);
+            if (allowedDomain && !urlObj.hostname.endsWith(allowedDomain.replace('https://', ''))) {
+                console.warn('Blocked overlay with non-Supabase URL:', data.url);
+                return;
+            }
+        } catch (e) {
+            console.warn('Invalid overlay URL:', data.url);
+            return;
+        }
+
         const newOverlay = {
             id: `ov_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             url: data.url,
-            x: data.x || 0,
-            y: data.y || 0,
-            scale: data.scale || 1,
-            owner: data.owner || 'Anon',
+            x: Number(data.x) || 0,
+            y: Number(data.y) || 0,
+            scale: Math.max(0.05, Math.min(10, Number(data.scale) || 1)),
+            owner: (data.owner || 'Anon').substring(0, 20),
             createdAt: Date.now()
         };
 
@@ -1126,13 +1139,30 @@ io.on('connection', async (socket) => {
 
     socket.on('update_overlay', (data) => {
         // data: { id, x, y, scale }
+        if (!data || !data.id) return;
         const ov = activeOverlays.find(o => o.id === data.id);
         if (ov) {
-            ov.x = data.x;
-            ov.y = data.y;
-            ov.scale = data.scale;
+            ov.x = Number(data.x) || ov.x;
+            ov.y = Number(data.y) || ov.y;
+            ov.scale = Math.max(0.05, Math.min(10, Number(data.scale) || ov.scale));
             io.emit('update_overlays', activeOverlays);
         }
+    });
+
+    socket.on('delete_overlay', (overlayId) => {
+        if (!overlayId || typeof overlayId !== 'string') return;
+        const before = activeOverlays.length;
+        activeOverlays = activeOverlays.filter(o => o.id !== overlayId);
+        if (activeOverlays.length < before) {
+            io.emit('update_overlays', activeOverlays);
+        }
+    });
+
+    socket.on('clear_overlays', () => {
+        activeOverlays = [];
+        io.emit('update_overlays', activeOverlays);
+        const sysMsg = { id: 'SYSTEM', text: `All overlays cleared by ${socket.name || 'Anon'}`, name: 'System' };
+        io.emit('chat', sysMsg);
     });
 
     socket.on('cursor', (data) => {
@@ -1159,16 +1189,7 @@ io.on('connection', async (socket) => {
             const text = msg.text.substring(0, MAX_MSG_LENGTH);
 
             // Admin commands removed from chat for security.
-            // Use the /admin panel instead.
-
-            // Admin: /rmoverlay [id]
-            if (text.startsWith('/rmoverlay')) {
-                const parts = text.split(' ');
-                if (parts[1]) {
-                    activeOverlays = activeOverlays.filter(o => o.id !== parts[1]);
-                    io.emit('update_overlays', activeOverlays);
-                }
-            }
+            // Use the overlay tool UI or /admin panel instead.
 
             const chatMsg = {
                 id: socket.id,

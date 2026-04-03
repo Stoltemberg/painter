@@ -126,8 +126,8 @@ CREATE POLICY "leaderboard_update_all"
 -- ╚══════════════════════════════════════════════════════════╝
 
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('pixel-board', 'pixel-board', false)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('pixel-board', 'pixel-board', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 DROP POLICY IF EXISTS "pixel_board_download_all" ON storage.objects;
 CREATE POLICY "pixel_board_download_all"

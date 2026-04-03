@@ -115,9 +115,17 @@
             <!-- Overlay Controls -->
             <div id="overlayControls" class="context-panel hidden">
                 <div class="panel-header">Overlay Controls</div>
-                <div class="panel-content" style="display: flex; gap: 10px; align-items: center;">
-                    <button id="placeOverlayBtn" class="action-btn">Upload New</button>
-                    <button id="clearOverlaysBtn" class="danger-btn" title="Clear All">🗑️</button>
+                <div class="panel-content" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button id="placeOverlayBtn" class="action-btn" title="Upload image overlay">📤 Upload</button>
+                        <button id="deleteOverlayBtn" class="action-btn" title="Delete selected overlay (Del)" disabled>🗑️ Delete</button>
+                        <button id="clearOverlaysBtn" class="danger-btn" title="Clear All Overlays">❌ All</button>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center; font-size: 0.75rem; color: #aaa;">
+                        <span>Opacity</span>
+                        <input type="range" id="overlayOpacitySlider" min="10" max="100" value="65" style="flex: 1; height: 4px;">
+                        <span id="overlayOpacityValue">65%</span>
+                    </div>
 
                     <!-- Hidden File Input -->
                     <input type="file" id="overlayInput" accept="image/*" style="display: none;">
