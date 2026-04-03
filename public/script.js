@@ -566,9 +566,9 @@ if (teleBtn) {
     teleBtn.addEventListener('click', () => {
         const x = parseInt(teleX.value) || 0;
         const y = parseInt(teleY.value) || 0;
-        // Center view on X, Y
-        offsetX = x - (canvas.width / 2) / scale;
-        offsetY = y - (canvas.height / 2) / scale;
+        // Center view on X, Y — offsetX/Y is the center point
+        offsetX = x;
+        offsetY = y;
         needsRedraw = true;
         updateMinimapViewport();
     });
@@ -926,8 +926,10 @@ function updateMinimap() {
 function updateMinimapViewport() {
     const vpW = (canvas.width / scale) / boardSize * 150;
     const vpH = (canvas.height / scale) / boardSize * 150;
-    const vpX = (offsetX / boardSize) * 150;
-    const vpY = (offsetY / boardSize) * 150;
+    // offsetX/Y is the CENTER of the viewport in world coords
+    // So the top-left of the viewport indicator is center minus half size
+    const vpX = (offsetX / boardSize) * 150 - vpW / 2;
+    const vpY = (offsetY / boardSize) * 150 - vpH / 2;
 
     minimapViewport.style.width = `${vpW}px`;
     minimapViewport.style.height = `${vpH}px`;
@@ -945,9 +947,9 @@ minimapCanvas.parentNode.addEventListener('mousedown', (e) => {
     const px = Math.max(0, Math.min(1, mx / 150));
     const py = Math.max(0, Math.min(1, my / 150));
 
-    // Update Offset to center on that spot
-    offsetX = (px * boardSize) - (canvas.width / 2) / scale;
-    offsetY = (py * boardSize) - (canvas.height / 2) / scale;
+    // offsetX/Y IS the center, so just set directly to world coordinate
+    offsetX = px * boardSize;
+    offsetY = py * boardSize;
 
     needsRedraw = true;
     updateMinimapViewport();
