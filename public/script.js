@@ -106,6 +106,11 @@ const deleteOverlayBtn = document.getElementById('deleteOverlayBtn');
 const clearOverlaysBtn = document.getElementById('clearOverlaysBtn');
 const overlayOpacitySlider = document.getElementById('overlayOpacitySlider');
 const overlayOpacityValue = document.getElementById('overlayOpacityValue');
+const autoPaintBtn = document.getElementById('autoPaintBtn');
+const autoPaintProgress = document.getElementById('autoPaintProgress');
+const autoPaintBar = document.getElementById('autoPaintBar');
+const autoPaintStatus = document.getElementById('autoPaintStatus');
+const autoPaintPercent = document.getElementById('autoPaintPercent');
 
 // View Mode State
 let isRestrictedView = false;
@@ -361,6 +366,172 @@ if (overlayOpacitySlider) {
         overlayOpacity = parseInt(e.target.value) / 100;
         if (overlayOpacityValue) overlayOpacityValue.textContent = `${e.target.value}%`;
         needsRedraw = true;
+    });
+}
+
+// === AUTO-PAINT SYSTEM ===
+const AUTO_PAINT_MAX_DIM = 200; // Max 200x200 pixels
+const AUTO_PAINT_BATCH_SIZE = 50; // Pixels per socket emit
+const AUTO_PAINT_BATCH_DELAY = 100; // ms between batches
+const AUTO_PAINT_ALPHA_THRESHOLD = 128; // Skip semi-transparent pixels
+let isAutoPainting = false;
+
+function updateAutoPaintUI(percent, statusText) {
+    if (autoPaintBar) autoPaintBar.style.width = `${percent}%`;
+    if (autoPaintPercent) autoPaintPercent.textContent = `${Math.round(percent)}%`;
+    if (autoPaintStatus) autoPaintStatus.textContent = statusText;
+}
+
+async function autoPaintOverlay(overlayId) {
+    const ov = activeOverlays.find(o => o.id === overlayId);
+    if (!ov || !ov.img || !ov.img.complete) {
+        showToast('Overlay image not loaded yet', 'error');
+        return;
+    }
+
+    if (isAutoPainting) {
+        showToast('Auto-paint already in progress', 'error');
+        return;
+    }
+
+    isAutoPainting = true;
+
+    // Show progress UI
+    if (autoPaintProgress) autoPaintProgress.style.display = 'block';
+    if (autoPaintBtn) autoPaintBtn.disabled = true;
+    if (deleteOverlayBtn) deleteOverlayBtn.disabled = true;
+    if (placeOverlayBtn) placeOverlayBtn.disabled = true;
+    updateAutoPaintUI(0, 'Reading pixels...');
+
+    try {
+        // Calculate target dimensions (cap at MAX_DIM)
+        let targetW = Math.round(ov.img.naturalWidth * ov.scale);
+        let targetH = Math.round(ov.img.naturalHeight * ov.scale);
+
+        // Cap dimensions
+        if (targetW > AUTO_PAINT_MAX_DIM || targetH > AUTO_PAINT_MAX_DIM) {
+            const ratio = Math.min(AUTO_PAINT_MAX_DIM / targetW, AUTO_PAINT_MAX_DIM / targetH);
+            targetW = Math.round(targetW * ratio);
+            targetH = Math.round(targetH * ratio);
+        }
+
+        if (targetW < 1 || targetH < 1) {
+            showToast('Overlay too small to paint', 'error');
+            return;
+        }
+
+        // Draw image to offscreen canvas at target resolution
+        const offscreen = document.createElement('canvas');
+        offscreen.width = targetW;
+        offscreen.height = targetH;
+        const offCtx = offscreen.getContext('2d');
+        offCtx.imageSmoothingEnabled = false;
+        offCtx.drawImage(ov.img, 0, 0, targetW, targetH);
+
+        // Read all pixels
+        const imageData = offCtx.getImageData(0, 0, targetW, targetH);
+        const data = imageData.data;
+
+        // Build pixel array (skip transparent)
+        const pixels = [];
+        for (let py = 0; py < targetH; py++) {
+            for (let px = 0; px < targetW; px++) {
+                const i = (py * targetW + px) * 4;
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const a = data[i + 3];
+
+                if (a < AUTO_PAINT_ALPHA_THRESHOLD) continue; // Skip transparent
+
+                // Map to world coordinates
+                const worldX = Math.floor(ov.x + px);
+                const worldY = Math.floor(ov.y + py);
+
+                // Bounds check
+                if (worldX < 0 || worldX >= boardSize || worldY < 0 || worldY >= boardSize) continue;
+
+                pixels.push({ x: worldX, y: worldY, r, g, b, t: myTeam });
+            }
+        }
+
+        if (pixels.length === 0) {
+            showToast('No visible pixels to paint', 'error');
+            return;
+        }
+
+        // Check ink
+        const inkNeeded = pixels.length;
+        if (ink < inkNeeded) {
+            showToast(`Not enough ink! Need ${inkNeeded}, have ${Math.floor(ink)}`, 'error');
+            return;
+        }
+
+        updateAutoPaintUI(0, `Painting ${pixels.length} pixels...`);
+
+        // Chunk and emit with delay
+        const totalBatches = Math.ceil(pixels.length / AUTO_PAINT_BATCH_SIZE);
+        let batchIndex = 0;
+
+        const paintNextBatch = () => {
+            if (batchIndex >= totalBatches) {
+                // Done!
+                updateAutoPaintUI(100, 'Complete!');
+                showToast(`Painted ${pixels.length} pixels!`, 'success');
+
+                // Remove overlay after painting
+                socket.emit('delete_overlay', overlayId);
+                selectedOverlayId = null;
+
+                setTimeout(() => {
+                    if (autoPaintProgress) autoPaintProgress.style.display = 'none';
+                    isAutoPainting = false;
+                    if (autoPaintBtn) autoPaintBtn.disabled = true;
+                    if (deleteOverlayBtn) deleteOverlayBtn.disabled = true;
+                    if (placeOverlayBtn) placeOverlayBtn.disabled = false;
+                }, 1500);
+                return;
+            }
+
+            const start = batchIndex * AUTO_PAINT_BATCH_SIZE;
+            const end = Math.min(start + AUTO_PAINT_BATCH_SIZE, pixels.length);
+            const batch = pixels.slice(start, end);
+
+            // Optimistic local draw
+            batch.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
+
+            // Emit to server
+            socket.emit('batch_pixels', batch);
+
+            // Deduct ink
+            ink -= batch.length;
+            if (inkValue) inkValue.textContent = Math.floor(ink);
+
+            // Update progress
+            batchIndex++;
+            const percent = (batchIndex / totalBatches) * 100;
+            updateAutoPaintUI(percent, `Painting... ${end}/${pixels.length}`);
+
+            setTimeout(paintNextBatch, AUTO_PAINT_BATCH_DELAY);
+        };
+
+        paintNextBatch();
+
+    } catch (err) {
+        console.error('Auto-paint error:', err);
+        showToast('Auto-paint failed: ' + err.message, 'error');
+        isAutoPainting = false;
+        if (autoPaintProgress) autoPaintProgress.style.display = 'none';
+        if (placeOverlayBtn) placeOverlayBtn.disabled = false;
+    }
+}
+
+// Auto-paint button handler
+if (autoPaintBtn) {
+    autoPaintBtn.addEventListener('click', () => {
+        if (selectedOverlayId && !isAutoPainting) {
+            autoPaintOverlay(selectedOverlayId);
+        }
     });
 }
 
@@ -1100,6 +1271,7 @@ canvas.addEventListener('mousedown', e => {
         if (hit) {
             selectedOverlayId = hit.id;
             if (deleteOverlayBtn) deleteOverlayBtn.disabled = false;
+            if (autoPaintBtn && !isAutoPainting) autoPaintBtn.disabled = false;
             const ov = activeOverlays.find(o => o.id === hit.id);
 
             overlayDragStart = { x, y };
@@ -1124,6 +1296,7 @@ canvas.addEventListener('mousedown', e => {
         } else {
             selectedOverlayId = null;
             if (deleteOverlayBtn) deleteOverlayBtn.disabled = true;
+            if (autoPaintBtn) autoPaintBtn.disabled = true;
             needsRedraw = true;
         }
         return;
