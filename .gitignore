@@ -1,4 +1,9 @@
 node_modules/
-board.json
 .env
 .DS_Store
+
+# Runtime data files
+board.dat
+board.json
+team_scores.json
+zones.json

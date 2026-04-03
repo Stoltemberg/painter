@@ -2,9 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const io = require('socket.io')(http, {
     cors: {
-        origin: "*",
+        origin: CORS_ORIGIN === '*' ? '*' : CORS_ORIGIN.split(',').map(s => s.trim()),
         methods: ["GET", "POST"]
     },
     maxHttpBufferSize: 5e7, // 50MB (Allow large init payload)
@@ -169,6 +170,25 @@ function updateGlobalLeaderboard(name, score, guestId) {
 // Sync Cache every 1s (Real-time requirement)
 setInterval(syncScores, 1000);
 
+// Debounced leaderboard broadcast (every 2s instead of per-pixel)
+let leaderboardDirty = false;
+setInterval(() => {
+    if (leaderboardDirty) {
+        io.emit('leaderboard', globalLeaderboard);
+        io.emit('team_scores', teamScores);
+        leaderboardDirty = false;
+    }
+}, 2000);
+
+// Debounced team scores persistence (every 10s)
+let teamScoresDirty = false;
+setInterval(() => {
+    if (teamScoresDirty) {
+        saveTeamScores();
+        teamScoresDirty = false;
+    }
+}, 10000);
+
 // Load board logic
 const initBoard = async () => {
     let loadedFromCloud = false;
@@ -182,38 +202,7 @@ const initBoard = async () => {
             return true;
         }
 
-        // Migrate from 3000x3000 (Expand)
-        if (len === 3000 * 3000 * 3) {
-            console.log('Migrating 3000x3000 board to 4500x4500...');
-            const oldWidth = 3000;
-            const newWidth = 4500;
-            for (let y = 0; y < 3000; y++) {
-                const sourceStart = y * oldWidth * 3;
-                const sourceEnd = sourceStart + (oldWidth * 3);
-                const targetStart = y * newWidth * 3;
-                buffer.copy(board, targetStart, sourceStart, sourceEnd);
-            }
-            console.log('Migration complete (Expanded).');
-            return true;
-        }
-
-        // Migrate from 6000x6000 (Crop)
-        if (len === 6000 * 6000 * 3) {
-            console.log('Migrating 6000x6000 board to 4500x4500...');
-            const oldWidth = 6000;
-            const newWidth = 4500;
-            // We only take the top-left 4500x4500
-            for (let y = 0; y < 4500; y++) {
-                const sourceStart = y * oldWidth * 3;
-                // We copy 4500 pixels (width) * 3 bytes
-                const copyLen = newWidth * 3;
-                const targetStart = y * newWidth * 3;
-                buffer.copy(board, targetStart, sourceStart, sourceStart + copyLen);
-            }
-            console.log('Migration complete (Cropped).');
-            return true;
-        }
-
+        console.log(`Board size mismatch: expected ${BUFFER_SIZE}, got ${len}`);
         return false;
     };
 
@@ -267,13 +256,20 @@ initBoard();
 
 app.use(express.static('public'));
 
-// --- Middleware: Simple Basic Auth ---
+// --- Middleware: Basic Auth (credentials from env vars) ---
 const basicAuth = (req, res, next) => {
-    const auth = { login: 'admin', password: 'admin123' }; // TODO: Env vars
+    const adminUser = process.env.ADMIN_USER;
+    const adminPass = process.env.ADMIN_PASSWORD;
+
+    if (!adminUser || !adminPass) {
+        console.error('ADMIN_USER / ADMIN_PASSWORD env vars not set. Admin access disabled.');
+        return res.status(503).send('Admin access not configured.');
+    }
+
     const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
     const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
 
-    if (login && password && login === auth.login && password === auth.password) {
+    if (login && password && login === adminUser && password === adminPass) {
         return next();
     }
 
@@ -288,10 +284,14 @@ app.get('/admin', basicAuth, (req, res) => {
 
 // --- Admin Zones API ---
 app.get('/api/config', (req, res) => {
-    // Return only public anon key
+    // Return ONLY the public anon key — NEVER the service role key
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    if (!anonKey) {
+        console.warn('/api/config: SUPABASE_ANON_KEY not set, falling back to SUPABASE_KEY (not recommended)');
+    }
     res.json({
         supabaseUrl: process.env.SUPABASE_URL,
-        supabaseKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY
+        supabaseKey: anonKey || process.env.SUPABASE_KEY
     });
 });
 
@@ -560,7 +560,6 @@ const getCompressedBoard = () => {
     cachedCompressedBoard = zlib.gzipSync(board);
     lastCompressionTime = now;
     return cachedCompressedBoard;
-    return cachedCompressedBoard;
 };
 
 // --- Redis & Sync Logic ---
@@ -748,7 +747,15 @@ io.on('connection', async (socket) => {
             return;
         }
 
-        const { x, y, r, g, b, size = 1 } = data; // Default size 1
+        let { x, y, r, g, b, size = 1 } = data; // Default size 1
+
+        // --- Input Validation ---
+        x = Math.floor(Number(x)); y = Math.floor(Number(y));
+        r = Math.max(0, Math.min(255, Math.floor(Number(r) || 0)));
+        g = Math.max(0, Math.min(255, Math.floor(Number(g) || 0)));
+        b = Math.max(0, Math.min(255, Math.floor(Number(b) || 0)));
+        size = Math.max(1, Math.min(10, Math.floor(Number(size) || 1)));
+        if (isNaN(x) || isNaN(y) || x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) return;
 
         // Check Protection
         for (const zone of protectedZones) {
@@ -834,10 +841,10 @@ io.on('connection', async (socket) => {
                 broadcastLeaderboardLegacy();
             }
 
-            // Real-time Update
+            // Real-time Update (debounced broadcast via interval)
             updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
-            io.emit('leaderboard', globalLeaderboard);
-            io.emit('team_scores', teamScores); // V7: Team Score
+            leaderboardDirty = true;
+            teamScoresDirty = true;
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
@@ -864,14 +871,14 @@ io.on('connection', async (socket) => {
             const { x, y, r, g, b } = p;
             if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) continue;
 
-            let protected = false;
+            let isProtected = false;
             for (const zone of protectedZones) {
                 if (x >= zone.x && x < zone.x + zone.w && y >= zone.y && y < zone.y + zone.h) {
-                    protected = true;
+                    isProtected = true;
                     break;
                 }
             }
-            if (protected) continue;
+            if (isProtected) continue;
 
             const index = (y * BOARD_WIDTH + x) * 3;
             if (board[index] !== r || board[index + 1] !== g || board[index + 2] !== b) {
@@ -942,10 +949,10 @@ io.on('connection', async (socket) => {
                 broadcastLeaderboardLegacy();
             }
 
-            // Real-time Update
+            // Real-time Update (debounced broadcast via interval)
             updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
-            io.emit('leaderboard', globalLeaderboard);
-            io.emit('team_scores', teamScores); // V7: Broadcast Team Scores
+            leaderboardDirty = true;
+            teamScoresDirty = true;
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
@@ -966,7 +973,6 @@ io.on('connection', async (socket) => {
                     // Store userId in state
                     state.id = data.user.id;
                     state.ink = USER_MAX;
-                    state.ink = Math.max(state.ink, USER_MAX);
                 }
                 // Ensure ID is always set for re-auth
                 state.id = data.user.id;
@@ -1147,28 +1153,8 @@ io.on('connection', async (socket) => {
 
             const text = msg.text.substring(0, MAX_MSG_LENGTH);
 
-            // ADMIN TOOLS (Secret Command)
-            if (text.startsWith('/clear admin123') || text === '/clear_overlays') {
-                console.log('Clearing Overlays/Board');
-                if (text === '/clear_overlays') {
-                    activeOverlays = [];
-                    io.emit('update_overlays', activeOverlays);
-                    io.emit('chat', { id: 'SYSTEM', text: 'Overlays cleared.', name: 'System' });
-                    return;
-                }
-
-                board.fill(255);
-                needsSave = true;
-                io.emit('init', board); // Reload everyone
-                activeOverlays = []; // Clear overlays too
-                io.emit('update_overlays', activeOverlays);
-
-                const sysMsg = { id: 'SYSTEM', text: '⚠️ BOARD CLEARED BY ADMIN ⚠️', name: 'System' };
-                chatHistory.push(sysMsg);
-                if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
-                io.emit('chat', sysMsg);
-                return;
-            }
+            // Admin commands removed from chat for security.
+            // Use the /admin panel instead.
 
             // Admin: /rmoverlay [id]
             if (text.startsWith('/rmoverlay')) {
@@ -1202,6 +1188,35 @@ io.on('connection', async (socket) => {
     });
 }); // End of io.on('connection')
 
+// --- Health Check ---
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        uptime: process.uptime(),
+        connections: io.engine.clientsCount,
+        boardSize: `${BOARD_WIDTH}x${BOARD_HEIGHT}`,
+        memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
+    });
+});
+
 http.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+// --- Graceful Shutdown ---
+const shutdown = async (signal) => {
+    console.log(`\n${signal} received. Saving state before shutdown...`);
+    try {
+        needsSave = true;
+        await saveBoard();
+        await flushStrokes();
+        saveTeamScores();
+        console.log('State saved. Shutting down.');
+    } catch (err) {
+        console.error('Error during shutdown save:', err);
+    }
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

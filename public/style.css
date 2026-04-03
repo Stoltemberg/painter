@@ -173,6 +173,7 @@ input[type=number]::-webkit-outer-spin-button {
 
 input[type=number] {
     -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 #nicknameInput {
@@ -688,4 +689,243 @@ input[type=range]::-webkit-slider-runnable-track {
     cursor: pointer;
     background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
+}
+
+/* --- Toast Notification System --- */
+#toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-family: 'Inter', sans-serif;
+    color: #fff;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transform: translateX(120%);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: auto;
+    max-width: 320px;
+    word-break: break-word;
+}
+
+.toast-show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-hide {
+    transform: translateX(120%);
+    opacity: 0;
+}
+
+.toast-info {
+    background: rgba(59, 130, 246, 0.85);
+    border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
+.toast-error {
+    background: rgba(239, 68, 68, 0.85);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.toast-success {
+    background: rgba(34, 197, 94, 0.85);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.toast-warning {
+    background: rgba(234, 179, 8, 0.85);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    color: #1a1a2e;
+}
+
+/* --- Loading Skeleton --- */
+#loadingOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    transition: opacity 0.5s ease;
+}
+
+#loadingOverlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-top: 16px;
+    color: var(--text-secondary, #888);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+}
+
+/* --- Keyboard Shortcuts Hint --- */
+.shortcuts-hint {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.7rem;
+    color: var(--text-secondary, #888);
+    font-family: 'Inter', sans-serif;
+    z-index: 100;
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.shortcuts-hint:hover {
+    opacity: 1;
+}
+
+/* --- Mobile Responsive --- */
+@media (max-width: 768px) {
+    .toolbar {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 6px 8px;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        border-radius: 16px 16px 0 0;
+        justify-content: center;
+    }
+
+    .glass-group {
+        gap: 4px;
+        padding: 4px 6px;
+    }
+
+    .toolbar button,
+    .toolbar .tool-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.75rem;
+        padding: 4px;
+    }
+
+    .minimap-container {
+        width: 100px;
+        height: 100px;
+        bottom: auto;
+        top: 8px;
+        right: 8px;
+    }
+
+    .minimap-container canvas {
+        width: 100px;
+        height: 100px;
+    }
+
+    .chat-container {
+        width: calc(100% - 16px);
+        left: 8px;
+        bottom: 70px;
+        max-height: 160px;
+    }
+
+    #leaderboard,
+    #team-leaderboard {
+        font-size: 0.75rem;
+        max-width: 140px;
+    }
+
+    .color-palette {
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .color-palette .swatch {
+        width: 20px;
+        height: 20px;
+    }
+
+    #coordsDiv {
+        font-size: 0.7rem;
+    }
+
+    #toast-container {
+        left: 8px;
+        right: 8px;
+        top: auto;
+        bottom: 80px;
+    }
+
+    .toast {
+        max-width: 100%;
+    }
+
+    .shortcuts-hint {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .toolbar {
+        padding: 4px;
+    }
+
+    .glass-group {
+        padding: 3px 4px;
+    }
+
+    .toolbar button,
+    .toolbar .tool-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.65rem;
+    }
+
+    .minimap-container {
+        width: 80px;
+        height: 80px;
+    }
+
+    .minimap-container canvas {
+        width: 80px;
+        height: 80px;
+    }
+
+    input[type="color"] {
+        width: 28px;
+        height: 28px;
+    }
 }

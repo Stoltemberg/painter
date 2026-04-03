@@ -48,6 +48,39 @@ async function saveCache(blob) {
 // Load cache moved to end
 // Attempt load on start
 
+// --- Toast Notification System ---
+function createToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function showToast(message, type = 'info', duration = 3000) {
+    const container = createToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    // Trigger entrance animation
+    requestAnimationFrame(() => {
+        toast.classList.add('toast-show');
+    });
+
+    // Auto-dismiss
+    setTimeout(() => {
+        toast.classList.remove('toast-show');
+        toast.classList.add('toast-hide');
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+    }, duration);
+}
 // DOM Elements
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for opaque
@@ -305,15 +338,7 @@ if (overlayInput) {
 
 // Old Tool Listeners removed in favor of setTool
 
-
-function setColor(hex) {
-    colorPicker.value = hex;
-    currentMode = 'brush';
-    canvas.style.cursor = 'crosshair';
-    if (eraserBtn) eraserBtn.style.border = '1px solid #555';
-    if (pipetteBtn) pipetteBtn.style.border = '1px solid #555';
-    updateRecentColorsUI();
-}
+// setColor() defined below (single declaration)
 
 if (colorPicker) {
     colorPicker.addEventListener('input', () => {
@@ -436,12 +461,7 @@ if (loginBtn) {
 
 // Auth State Change moved to initSupabase
 
-function handleUser(user) {
-    // Use email part as nickname for now? 
-    // Or allow nickname update.
-    myNickname = user.email.split('@')[0];
-    if (nicknameInput) nicknameInput.value = myNickname;
-}
+// handleUser() defined below (single declaration)
 
 // Teams
 const teamSelect = document.getElementById('teamSelect');
@@ -526,14 +546,7 @@ if (exportBtn) {
     });
 }
 
-if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-        const link = document.createElement('a');
-        link.download = `pixel-board-${Date.now()}.png`;
-        link.href = bufferCanvas.toDataURL('image/png');
-        link.click();
-    });
-}
+// (Duplicate export listener removed)
 
 if (viewModeBtn) {
     viewModeBtn.addEventListener('click', () => {
@@ -575,16 +588,11 @@ if (chatInput) {
                 }
                 chatInput.blur(); // Close chat focus
                 canvas.focus(); // Return focus to canvas/body
-            } else {
-                // Open chat logic
+            } else if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                // Open chat only if not in another input
                 e.preventDefault();
                 chatInput.focus();
             }
-
-            isDrawing = true;
-            // Open chat logic
-            e.preventDefault();
-            chatInput.focus();
         }
 
         // Escape to cancel/close
@@ -616,13 +624,7 @@ function addChatMessage(text, isMe = false, name = 'Anon') {
 }
 
 // --- Inputs & Palette ---
-if (eraserBtn) {
-    eraserBtn.addEventListener('click', () => {
-        currentMode = 'eraser';
-        canvas.style.cursor = 'cell';
-        eraserBtn.style.border = '2px solid #4ade80';
-    });
-}
+// (Orphan eraser listener removed — handled by setTool())
 
 function setColor(hex) {
     colorPicker.value = hex;
@@ -712,19 +714,20 @@ function clampView() {
 }
 
 // --- Rendering (Optimized Loop) ---
-// --- Rendering// Revert to robust Interval Loop (simpler than rAF for debugging)
-// This ensures that if any logic sets needsRedraw, it WILL draw per 33ms.
-// No risk of loop stalling.
-setInterval(() => {
+// Use requestAnimationFrame for battery/CPU efficiency (pauses when tab is hidden)
+// needsRedraw already declared above
+function renderLoop() {
     if (needsRedraw) {
         draw();
         needsRedraw = false;
     }
-}, 33);
+    requestAnimationFrame(renderLoop);
+}
+requestAnimationFrame(renderLoop);
 
 // Explicit draw on startup
-setTimeout(draw, 500);
-setTimeout(draw, 1000);
+setTimeout(() => { needsRedraw = true; }, 500);
+setTimeout(() => { needsRedraw = true; }, 1000);
 
 // Init App call moved to end of file to ensure variables are declared.
 
@@ -1168,13 +1171,29 @@ canvas.addEventListener('mousedown', e => {
 
         if (startR === targetR && startG === targetG && startB === targetB) return;
 
-        // BFS
+        // Optimized BFS: Read a region of image data at once instead of pixel-by-pixel
+        const FILL_LIMIT = 500;
+        const regionSize = Math.ceil(Math.sqrt(FILL_LIMIT)) * 2 + 1; // Approx bounding region
+        const rx = Math.max(0, x - Math.floor(regionSize / 2));
+        const ry = Math.max(0, y - Math.floor(regionSize / 2));
+        const rw = Math.min(boardSize - rx, regionSize);
+        const rh = Math.min(boardSize - ry, regionSize);
+        const regionData = bufferCtx.getImageData(rx, ry, rw, rh);
+        const rd = regionData.data;
+
+        const getPixel = (px, py) => {
+            const lx = px - rx, ly = py - ry;
+            if (lx < 0 || lx >= rw || ly < 0 || ly >= rh) return null;
+            const i = (ly * rw + lx) * 4;
+            return [rd[i], rd[i + 1], rd[i + 2]];
+        };
+
         const queue = [{ x, y }];
         const visited = new Set();
         const changes = [];
         let cost = 0;
 
-        while (queue.length > 0 && cost < 500) { // Limit 500
+        while (queue.length > 0 && cost < FILL_LIMIT) {
             const p = queue.shift();
             const k = `${p.x},${p.y}`;
             if (visited.has(k)) continue;
@@ -1182,7 +1201,8 @@ canvas.addEventListener('mousedown', e => {
 
             if (p.x < 0 || p.x >= boardSize || p.y < 0 || p.y >= boardSize) continue;
 
-            const px = bufferCtx.getImageData(p.x, p.y, 1, 1).data;
+            const px = getPixel(p.x, p.y);
+            if (!px) continue; // Outside cached region, skip
             if (px[0] === startR && px[1] === startG && px[2] === startB) {
                 changes.push({ x: p.x, y: p.y, r: targetR, g: targetG, b: targetB, t: myTeam });
                 cost++;
@@ -1335,22 +1355,7 @@ canvas.addEventListener('mouseup', (e) => {
         isDraggingOverlay = false;
         isResizingOverlay = false;
     }
-    if (isDraggingOverlay || isResizingOverlay) {
-        // Commit change
-        if (selectedOverlayId) {
-            const ov = activeOverlays.find(o => o.id === selectedOverlayId);
-            if (ov) {
-                socket.emit('update_overlay', {
-                    id: ov.id,
-                    x: ov.x,
-                    y: ov.y,
-                    scale: ov.scale
-                });
-            }
-        }
-        isDraggingOverlay = false;
-        isResizingOverlay = false;
-    }
+    // (Duplicate overlay mouseup block removed)
 
     if (currentMode === 'line' && lineStart) {
         const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -1684,8 +1689,8 @@ function startRefillSimulation() {
 }
 
 socket.on('error_msg', (msg) => {
-    // Show toast or alert
-    alert(msg);
+    // Show toast notification instead of blocking alert()
+    showToast(msg, 'error');
 });
 
 socket.on('auth_success', (data) => {
@@ -1744,6 +1749,13 @@ socket.on('board_chunk', (chunk) => {
     if (chunk.progress >= 0.99) {
         if (statusDiv) statusDiv.textContent = 'Online';
         console.log('Board loading complete.');
+
+        // Dismiss loading overlay
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
+            setTimeout(() => loadingOverlay.remove(), 600);
+        }
 
         // Save to Cache
         bufferCanvas.toBlob((blob) => {
@@ -1866,6 +1878,13 @@ socket.on('init', async (data) => {
         updateMinimap();
         if (statusDiv) statusDiv.textContent = 'Online';
         console.log('Board initialized from binary.');
+
+        // Dismiss loading overlay
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
+            setTimeout(() => loadingOverlay.remove(), 600);
+        }
     }
 });
 
@@ -2051,16 +2070,27 @@ socket.on('leaderboard', (data) => {
     }
     leaderboardDiv.style.display = 'block';
 
-    let html = `<h3>🏆 Top Artists</h3>`;
+    // Build leaderboard safely (no innerHTML to prevent XSS)
+    leaderboardDiv.innerHTML = '';
+    const title = document.createElement('h3');
+    title.textContent = '🏆 Top Artists';
+    leaderboardDiv.appendChild(title);
+
     data.forEach(p => {
-        html += `
-            <div class="leaderboard-item">
-                <span>${p.name.substring(0, 10)}</span>
-                <span class="leaderboard-score">${p.score}px</span>
-            </div>
-        `;
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = (p.name || 'Anon').substring(0, 10);
+
+        const scoreSpan = document.createElement('span');
+        scoreSpan.className = 'leaderboard-score';
+        scoreSpan.textContent = `${p.score}px`;
+
+        item.appendChild(nameSpan);
+        item.appendChild(scoreSpan);
+        leaderboardDiv.appendChild(item);
     });
-    leaderboardDiv.innerHTML = html;
 });
 
 // V7: Team Leaderboard
