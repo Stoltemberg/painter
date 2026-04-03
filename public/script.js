@@ -910,8 +910,11 @@ function drawGrid(ctx, vx, vy, vw, vh) {
 function updateCursors() {
     for (const id in cursors) {
         const cursor = cursors[id];
-        const screenX = (cursor.worldX - offsetX) * scale;
-        const screenY = (cursor.worldY - offsetY) * scale;
+        // World → Screen: must match the draw transform
+        // draw does: translate(center) → scale → translate(-offset)
+        // So: screenX = (worldX - offsetX) * scale + canvas.width/2
+        const screenX = (cursor.worldX - offsetX) * scale + canvas.width / 2;
+        const screenY = (cursor.worldY - offsetY) * scale + canvas.height / 2;
         cursor.element.style.transform = `translate(${screenX}px, ${screenY}px)`;
     }
 }
@@ -2007,33 +2010,7 @@ socket.on('online_count', (count) => {
     if (onlineCountDiv) onlineCountDiv.textContent = `● ${count} Online`;
 });
 
-// --- Minimap Navigation ---
-minimapCanvas.addEventListener('mousedown', e => {
-    // Only navigate if left click
-    if (e.button !== 0) return;
-
-    const rect = minimapCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    const minimapW = minimapCanvas.width;
-    const minimapH = minimapCanvas.height;
-
-    // Convert to Percentage
-    const px = mx / minimapW;
-    const py = my / minimapH;
-
-    // Convert to World
-    const wx = px * boardSize;
-    const wy = py * boardSize;
-
-    // Center view
-    offsetX = wx - (canvas.width / 2) / scale;
-    offsetY = wy - (canvas.height / 2) / scale;
-
-    needsRedraw = true;
-    updateMinimapViewport();
-});
+// (Minimap navigation handled in main minimap handler above — duplicate removed)
 
 // --- Mouse Events ---
 // ...
