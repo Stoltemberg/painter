@@ -1341,8 +1341,6 @@ canvas.addEventListener('mousedown', e => {
         });
 
         if (pixels.length > 0) {
-            ink -= pixels.length;
-            if (inkValue) inkValue.textContent = Math.floor(ink);
             socket.emit('batch_pixels', pixels);
         }
         return;
@@ -1635,18 +1633,11 @@ if (resetBtn) {
     });
 }
 
-// --- Painting ---
+    // --- Painting ---
 function paint(clientX, clientY) {
     const now = Date.now();
     // Frontend Rate Limit (matching backend roughly)
     if (now - lastPaintEmit < 15) return;
-
-    // Check Ink
-    if (ink <= 0) {
-        if (inkValue) inkValue.style.color = 'red';
-        setTimeout(() => { if (inkValue) inkValue.style.color = ''; }, 200);
-        return;
-    }
 
     const { x, y } = screenToWorld(clientX, clientY);
     if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
@@ -1665,11 +1656,6 @@ function paint(clientX, clientY) {
         playPop(); // Local sound
         socket.emit('pixel', { x, y, r, g, b, size: 1, t: myTeam });
         lastPaintEmit = now;
-
-        // Optimistic update
-        ink--;
-        if (inkValue) inkValue.textContent = ink;
-        if (inkFill) inkFill.style.width = `${Math.min(100, (ink / maxInk) * 100)}%`;
     }
 }
 
@@ -1707,11 +1693,6 @@ function drawPixel(x, y, r, g, b, isLocal = false) {
 // Step 944 shows lines 600-650. Line 633 is `let supabase = null;`.
 // If grep found 2, maybe I pasted it twice in the same block?
 // I will remove this specific line.
-const inkValue = document.getElementById('inkValue');
-const inkFill = document.getElementById('inkFill');
-let ink = 0;
-let maxInk = 250;
-
 // Auth
 let supabaseClient = null; // Renamed to avoid window.supabase collision
 
@@ -1833,51 +1814,6 @@ socket.on('disconnect', (reason) => {
         statusDiv.style.color = '#f87171';
     }
 });
-
-let refillInterval;
-let refillRate = 15000; // Default guest rate
-
-// V7: Ink Update
-socket.on('ink', (data) => {
-    ink = data.ink;
-    maxInk = data.max;
-    refillRate = data.rate || 15000;
-
-    updateInkUI();
-    startRefillSimulation();
-});
-
-function updateInkUI() {
-    if (inkValue) inkValue.textContent = Math.floor(ink);
-    if (inkFill) {
-        const pct = Math.min(100, (ink / maxInk) * 100);
-        inkFill.style.width = `${pct}%`;
-        if (pct < 10) inkFill.style.background = '#f87171';
-        else inkFill.style.background = '#3b82f6';
-    }
-}
-
-function startRefillSimulation() {
-    if (refillInterval) clearInterval(refillInterval);
-
-    // Add 1 pixel every 'refillRate' milliseconds
-    // To make it smooth, maybe update progress bar more often?
-    // For now, let's just tick up the number/bar every second loosely?
-    // Or actually wait the full duration. 
-    // Let's do a smooth generic bar animation via CSS, but the number needs to tick.
-    // Simple approach: Tick every 1s, add fraction.
-
-    const tickRate = 1000;
-    const inkPerTick = tickRate / refillRate;
-
-    refillInterval = setInterval(() => {
-        if (ink < maxInk) {
-            ink += inkPerTick;
-            if (ink > maxInk) ink = maxInk;
-            updateInkUI();
-        }
-    }, tickRate);
-}
 
 socket.on('error_msg', (msg) => {
     // Show toast notification instead of blocking alert()

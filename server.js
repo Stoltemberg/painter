@@ -501,52 +501,6 @@ function broadcastLeaderboardLegacy() {
 }
 
 
-// V7: Ink / Energy System
-// Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
-const userInk = new Map();
-
-const GUEST_MAX = 250;
-const GUEST_REFILL_RATE = 15000; // 15s per pixel
-const USER_MAX = 750;
-const USER_REFILL_RATE = 10000; // 10s per pixel
-
-function getInkState(socket) {
-    // Prefer guestId from query, fallback to socket.id (shouldn't happen with updated client)
-    const id = socket.handshake.query.guestId || socket.id;
-
-    if (!userInk.has(id)) {
-        userInk.set(id, {
-            ink: GUEST_MAX,
-            lastRefill: Date.now(),
-            isUser: false
-        });
-    }
-    return userInk.get(id);
-}
-
-function updateInk(socket) {
-    const state = getInkState(socket); // Pass socket object now
-    const now = Date.now();
-    const max = state.isUser ? USER_MAX : GUEST_MAX;
-    const rate = state.isUser ? USER_REFILL_RATE : GUEST_REFILL_RATE;
-
-    // Visual refill: (time_diff / rate) pixels
-    const elapsed = now - state.lastRefill;
-    if (elapsed > 0) {
-        const refillAmount = elapsed / rate;
-        state.ink = Math.min(max, state.ink + refillAmount);
-        state.lastRefill = now;
-    }
-
-    // Emit rate for client animation
-    socket.emit('ink', {
-        ink: Math.floor(state.ink),
-        max,
-        rate
-    });
-    return state;
-}
-
 // Chunking Configuration
 
 // Cache compressed board to save CPU/RAM on concurrent connects
@@ -729,29 +683,12 @@ io.on('connection', async (socket) => {
     socket.emit('pixel_score', socket.pixelScore || 0);
     if (!supabase) broadcastLeaderboardLegacy();
 
-    // Initial Ink
-    updateInk(socket);
-
     // System Join Message
     socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
-
-    // socket.emit('init', board); // Removed unused full board emit (client uses chunks)
-
-    // V7: Ink / Energy System
-    // Map<socketId, { ink: number, lastRefill: number, isUser: boolean }>
-    // (Moved to global scope above)
-
-    // socket.emit('init', board); // Disabled to prevent duplicate data transmission (Chunks used instead)
 
     // --- Socket Event Handlers ---
     socket.on('pixel', (data) => {
         if (!data) return; // Prevention
-        const state = updateInk(socket);
-        if (state.ink < 1) {
-            socket.emit('error_msg', 'Out of Ink!');
-            return;
-        }
-
         let { x, y, r, g, b, size = 1 } = data; // Default size 1
 
         // --- Input Validation ---
@@ -793,8 +730,6 @@ io.on('connection', async (socket) => {
         }
 
         if (changed) {
-            // Deduct Ink
-            state.ink -= 1;
 
             needsSave = true;
             // Binary Packet: [X(2), Y(2), R(1), G(1), B(1), Team(1)]
@@ -853,21 +788,12 @@ io.on('connection', async (socket) => {
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
-
-            updateInk(socket); // Send update
         }
     });
 
     // V6: Batch Pixels (Stamps)
     socket.on('batch_pixels', (pixels) => {
         if (!Array.isArray(pixels) || pixels.length > 500) return;
-
-        const state = updateInk(socket);
-        // Check if enough ink
-        if (state.ink < pixels.length) {
-            socket.emit('error_msg', 'Not enough Ink!');
-            return;
-        }
 
         let changed = false;
         let pixelCount = 0;
@@ -896,7 +822,6 @@ io.on('connection', async (socket) => {
         }
 
         if (changed) {
-            state.ink -= pixelCount; // Accurate deduction
             needsSave = true;
             // Binary Batch: Sequence of [X(2), Y(2), R(1), G(1), B(1), Team(1)]
             const bufList = [];
@@ -961,8 +886,6 @@ io.on('connection', async (socket) => {
 
             // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
-
-            updateInk(socket);
         }
     });
 
@@ -971,16 +894,12 @@ io.on('connection', async (socket) => {
         if (!token || !supabase) return;
 
         supabase.auth.getUser(token).then(async ({ data, error }) => {
-            if (!error && data.user) {
-                const state = getInkState(socket);
-                if (!state.isUser) {
-                    state.isUser = true;
-                    // Store userId in state
-                    state.id = data.user.id;
-                    state.ink = USER_MAX;
+                if (socket.guestId) {
+                    // Update session/user mapping if needed
+                    console.log('User authenticated:', data.user.id);
                 }
                 // Ensure ID is always set for re-auth
-                state.id = data.user.id;
+                socket.userId = data.user.id;
 
                 // Link Session to User FIRST
                 if (socket.dbSessionId) {
@@ -1014,16 +933,12 @@ io.on('connection', async (socket) => {
                 // THEN emit success with nickname
                 socket.emit('auth_success', {
                     id: data.user.id,
-                    name: profile?.nickname || null, // null means "ask user"
-                    limit: USER_MAX
+                    name: profile?.nickname || null // null means "ask user"
                 });
 
                 if (profile?.nickname) {
                     socket.name = profile.nickname;
                 }
-
-                updateInk(socket);
-            }
         });
     });
 
@@ -1031,10 +946,9 @@ io.on('connection', async (socket) => {
     socket.on('update_nickname', async (newNick) => {
         if (!supabase) return;
 
-        const state = getInkState(socket);
         // helper check if authenticated
-        // Actually, valid Supabase user has state.isUser = true
-        if (!state.isUser) return;
+        // Actually, valid Supabase user has socket.userId set
+        if (!socket.userId) return;
 
         // Validation
         if (!newNick || newNick.length < 3 || newNick.length > 20) {
@@ -1042,7 +956,7 @@ io.on('connection', async (socket) => {
             return;
         }
 
-        const userId = state.id;
+        const userId = socket.userId;
 
         if (!userId) {
             socket.emit('nickname_error', 'Session invalid. Please refresh.');
