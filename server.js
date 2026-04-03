@@ -31,8 +31,13 @@ const supabaseKey = process.env.SUPABASE_KEY;
 let supabase = null;
 
 if (supabaseUrl && supabaseKey) {
-    supabase = createClient(supabaseUrl, supabaseKey);
-    console.log('Supabase client initialized.');
+    supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });
+    console.log('Supabase client initialized (service role).');
 } else {
     console.warn('Supabase credentials not found. Cloud persistence disabled.');
 }
