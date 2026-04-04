@@ -502,8 +502,9 @@ async function autoPaintOverlay(overlayId) {
             if (filteredBatch.length > 0) {
                 // Optimistic local draw
                 filteredBatch.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
-                // Emit to server
-                socket.emit('batch_pixels', filteredBatch);
+                // Emit to server (Binary)
+                const buf = encodeBatch(filteredBatch);
+                socket.emit('batch_pixels', buf);
             }
 
             // Update progress
@@ -1363,7 +1364,8 @@ canvas.addEventListener('mousedown', e => {
         });
 
         if (pixels.length > 0) {
-            socket.emit('batch_pixels', pixels);
+            const buf = encodeBatch(pixels);
+            socket.emit('batch_pixels', buf);
         }
         return;
     }
@@ -1426,7 +1428,8 @@ canvas.addEventListener('mousedown', e => {
         }
 
         if (changes.length > 0) {
-            socket.emit('batch_pixels', changes);
+            const buf = encodeBatch(changes);
+            socket.emit('batch_pixels', buf);
             changes.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b));
             playPop();
         }
@@ -1583,7 +1586,8 @@ canvas.addEventListener('mouseup', (e) => {
                 t: myTeam
             };
         });
-        socket.emit('batch_pixels', pixels);
+        const buf = encodeBatch(pixels);
+        socket.emit('batch_pixels', buf);
         // Draw local
         pixels.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
         lineStart = null;
@@ -1676,7 +1680,11 @@ function paint(clientX, clientY) {
 
         drawPixel(x, y, r, g, b, true);
         playPop(); // Local sound
-        socket.emit('pixel', { x, y, r, g, b, size: 1, t: myTeam });
+        
+        // Binary Emit: [X(2), Y(2), R(1), G(1), B(1), Team(1)]
+        const buf = encodePixel(x, y, r, g, b, myTeam);
+        socket.emit('pixel', buf);
+        
         lastPaintEmit = now;
     }
 }
@@ -1797,6 +1805,35 @@ async function initSupabase() {
 }
 // Removed module-level initSupabase() call to prevent double-init.
 // initApp() handles it.
+
+// --- HIGH PERFORMANCE BINARY HELPERS ---
+function encodePixel(x, y, r, g, b, t = 0) {
+    const buf = new Uint8Array(8);
+    const dv = new DataView(buf.buffer);
+    dv.setUint16(0, x, true);
+    dv.setUint16(2, y, true);
+    dv.setUint8(4, r);
+    dv.setUint8(5, g);
+    dv.setUint8(6, b);
+    dv.setUint8(7, t);
+    return buf;
+}
+
+function encodeBatch(pixels) {
+    const buf = new Uint8Array(pixels.length * 8);
+    const dv = new DataView(buf.buffer);
+    for (let i = 0; i < pixels.length; i++) {
+        const p = pixels[i];
+        const off = i * 8;
+        dv.setUint16(off, p.x, true);
+        dv.setUint16(off + 2, p.y, true);
+        dv.setUint8(off + 4, p.r);
+        dv.setUint8(off + 5, p.g);
+        dv.setUint8(off + 6, p.b);
+        dv.setUint8(off + 7, p.t || 0);
+    }
+    return buf;
+}
 
 function handleUser(user) {
     if (!loginBtn) return;

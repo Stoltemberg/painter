@@ -469,8 +469,10 @@ const saveBoard = async () => {
             // Split 6000x6000 board into 4 buffers (3000x3000 each)
             const Q_BYTE_SIZE = QUAD_SIZE * QUAD_SIZE * 3;
             
+            // Reuse a single buffer to minimize GC churn
+            const qBuffer = Buffer.alloc(Q_BYTE_SIZE);
+
             for (let q = 0; q < 4; q++) {
-                const qBuffer = Buffer.alloc(Q_BYTE_SIZE);
                 const offsetIdx = q;
                 
                 for (let row = 0; row < QUAD_SIZE; row++) {
@@ -483,7 +485,7 @@ const saveBoard = async () => {
                     board.copy(qBuffer, targetStart, sourceStart, sourceStart + QUAD_SIZE * 3);
                 }
 
-                // Upload quadrant
+                // Upload quadrant - sequential to minimize peak RAM
                 await supabase.storage.from('pixel-board').upload(QUADRANTS[q], qBuffer, {
                     contentType: 'application/octet-stream',
                     upsert: true
@@ -587,16 +589,16 @@ async function initRedis() {
                             updateBoardPixel(x, y, r, g, b2);
                         }
                     } else if (payload.t === 'b') {
-                        const buffers = payload.d.map(s => Buffer.from(s, 'base64'));
-                        for (const b of buffers) {
-                            if (b.length >= 7) {
-                                const x = b.readUInt16LE(0);
-                                const y = b.readUInt16LE(2);
-                                const r = b.readUInt8(4);
-                                const g = b.readUInt8(5);
-                                const b2 = b.readUInt8(6);
-                                updateBoardPixel(x, y, r, g, b2);
-                            }
+                        const batchBuf = Buffer.from(payload.d, 'base64');
+                        const count = Math.floor(batchBuf.length / 8);
+                        for (let i = 0; i < count; i++) {
+                            const off = i * 8;
+                            const x = batchBuf.readUInt16LE(off);
+                            const y = batchBuf.readUInt16LE(off + 2);
+                            const r = batchBuf.readUInt8(off + 4);
+                            const g = batchBuf.readUInt8(off + 5);
+                            const b = batchBuf.readUInt8(off + 6);
+                            updateBoardPixel(x, y, r, g, b);
                         }
                     }
                 } catch (e) { console.error('Redis Sync processing error', e); }
@@ -721,8 +723,20 @@ io.on('connection', async (socket) => {
 
     // --- Socket Event Handlers ---
     socket.on('pixel', (data) => {
-        if (!data) return; // Prevention
-        let { x, y, r, g, b, size = 1 } = data; // Default size 1
+        if (!data) return;
+        let x, y, r, g, b, size = 1, tid = 0;
+
+        // Binary Support: [X(2), Y(2), R(1), G(1), B(1), Team(1)] = 8 bytes
+        if (Buffer.isBuffer(data) && data.length >= 7) {
+            x = data.readUInt16LE(0);
+            y = data.readUInt16LE(2);
+            r = data.readUInt8(4);
+            g = data.readUInt8(5);
+            b = data.readUInt8(6);
+            tid = data.length >= 8 ? data.readUInt8(7) : 0;
+        } else {
+            ({ x, y, r, g, b, size = 1, t: tid = 0 } = data);
+        }
 
         // --- Input Validation ---
         x = Math.floor(Number(x)); y = Math.floor(Number(y));
@@ -730,6 +744,7 @@ io.on('connection', async (socket) => {
         g = Math.max(0, Math.min(255, Math.floor(Number(g) || 0)));
         b = Math.max(0, Math.min(255, Math.floor(Number(b) || 0)));
         size = Math.max(1, Math.min(10, Math.floor(Number(size) || 1)));
+        
         if (isNaN(x) || isNaN(y) || x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) return;
 
         // Check Protection
@@ -825,14 +840,35 @@ io.on('connection', async (socket) => {
     });
 
     // V6: Batch Pixels (Stamps)
-    socket.on('batch_pixels', (pixels) => {
-        if (!Array.isArray(pixels) || pixels.length > 500) return;
+    socket.on('batch_pixels', (data) => {
+        let pixels = [];
+        if (Buffer.isBuffer(data)) {
+            // Binary Batch: Sequence of [X(2), Y(2), R(1), G(1), B(1), Team(1)] = 8 bytes each
+            for (let i = 0; i + 7 < data.length; i += 8) {
+                pixels.push({
+                    x: data.readUInt16LE(i),
+                    y: data.readUInt16LE(i + 2),
+                    r: data.readUInt8(i + 4),
+                    g: data.readUInt8(i + 5),
+                    b: data.readUInt8(i + 6),
+                    t: data.readUInt8(i + 7)
+                });
+            }
+        } else {
+            pixels = Array.isArray(data) ? data : [];
+        }
+
+        if (pixels.length === 0 || pixels.length > 2000) return;
 
         let changed = false;
         let pixelCount = 0;
+        
+        // Single allocation for broadcast - much faster GC
+        const outBuffer = Buffer.alloc(pixels.length * 8);
+        let outPtr = 0;
 
         for (const p of pixels) {
-            const { x, y, r, g, b } = p;
+            let { x, y, r, g, b, t: tid = 0 } = p;
             if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT) continue;
 
             let isProtected = false;
@@ -851,74 +887,46 @@ io.on('connection', async (socket) => {
                 board[index + 2] = b;
                 changed = true;
                 pixelCount++;
-            }
-        }
 
-        if (changed) {
-            needsSave = true;
-            // Binary Batch: Sequence of [X(2), Y(2), R(1), G(1), B(1), Team(1)]
-            const bufList = [];
-            for (const p of pixels) {
-                const tid = p.t || 0;
-                const b = Buffer.alloc(8);
-                b.writeUInt16LE(p.x, 0);
-                b.writeUInt16LE(p.y, 2);
-                b.writeUInt8(p.r, 4);
-                b.writeUInt8(p.g, 5);
-                b.writeUInt8(p.b, 6);
-                b.writeUInt8(tid, 7);
-                bufList.push(b);
+                // Pack into outBuffer
+                outBuffer.writeUInt16LE(x, outPtr);
+                outBuffer.writeUInt16LE(y, outPtr + 2);
+                outBuffer.writeUInt8(r, outPtr + 4);
+                outBuffer.writeUInt8(g, outPtr + 5);
+                outBuffer.writeUInt8(b, outPtr + 6);
+                outBuffer.writeUInt8(tid, outPtr + 7);
+                outPtr += 8;
 
-                if (TEAMS[tid]) {
-                    teamScores[TEAMS[tid]]++;
-                }
+                if (TEAMS[tid]) teamScores[TEAMS[tid]]++;
 
-                // --- History Buffer for Batch ---
+                // --- Persistence ---
                 if (socket.dbSessionId) {
-                    const hex = "#" + ((1 << 24) + (p.r << 16) + (p.g << 8) + p.b).toString(16).slice(1);
+                    const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
                     strokeBuffer.push({
-                        x: p.x, y: p.y, color: hex,
+                        x, y, color: hex,
                         team: TEAMS[tid],
                         sessionId: socket.dbSessionId
                     });
                 }
             }
-            // Auto flush if too big after batch
-            if (strokeBuffer.length >= STROKE_BATCH_LIMIT) {
-                flushStrokes();
-            }
-            const finalBuf = Buffer.concat(bufList);
+        }
+
+        if (changed) {
+            needsSave = true;
+            const finalBuf = outPtr === outBuffer.length ? outBuffer : outBuffer.subarray(0, outPtr);
             socket.broadcast.emit('batch_pixels', finalBuf);
-
+            
             if (syncPub) {
-                const b64List = bufList.map(b => b.toString('base64'));
-                syncPub.publish('board_sync', JSON.stringify({ t: 'b', d: b64List }));
+                syncPub.publish('board_sync', JSON.stringify({ t: 'b', d: finalBuf.toString('base64') }));
             }
 
-            saveTeamScores(); // Save after batch update
+            if (strokeBuffer.length >= STROKE_BATCH_LIMIT) flushStrokes();
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
-
-            // Queue for Sync
-            if (supabase && socket.guestId) {
-                dirtyScores.set(socket.guestId, {
-                    id: socket.guestId,
-                    name: socket.name || 'Guest',
-                    score: socket.pixelScore,
-                    team: TEAMS[(pixels[0].t || 0)] || 'none'
-                });
-            } else {
-                broadcastLeaderboardLegacy();
-            }
-
-            // Real-time Update (debounced broadcast via interval)
-            updateGlobalLeaderboard(socket.name || 'Guest', socket.pixelScore, socket.guestId);
-            leaderboardDirty = true;
-            teamScoresDirty = true;
-
-            // Sync score back to client immediately
             socket.emit('pixel_score', socket.pixelScore);
+            teamScoresDirty = true;
+            broadcastLeaderboardLegacy();
         }
     });
 
