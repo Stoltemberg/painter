@@ -174,8 +174,8 @@ function updateGlobalLeaderboard(name, score, guestId) {
     if (globalLeaderboard.length > 10) globalLeaderboard.length = 10;
 }
 
-// Sync Cache every 1s (Real-time requirement)
-setInterval(syncScores, 1000);
+// Sync Cache every 30s (Optimized for DB resources)
+setInterval(syncScores, parseInt(process.env.DB_SYNC_INTERVAL) || 30000);
 
 // Debounced leaderboard broadcast (every 2s instead of per-pixel)
 let leaderboardDirty = false;
@@ -414,12 +414,13 @@ app.post('/api/admin/clear', basicAuth, (req, res) => {
 let needsSave = false;
 let isUploading = false;
 let strokeBuffer = [];
-const STROKE_BATCH_LIMIT = 50; // Max strokes before auto-flush
-const FLUSH_INTERVAL = 5000; // 5 seconds
+const STROKE_BATCH_LIMIT = 500; // Optimized: larger batch for fewer SQL inserts
+const FLUSH_INTERVAL = 10000; // 10 seconds flush
+const PERSIST_STROKES = process.env.PERSIST_STROKES === 'true'; // Toggle history logging
 
 // Helper: Flush buffered strokes to Supabase
 async function flushStrokes() {
-    if (strokeBuffer.length === 0 || !supabase) return;
+    if (!PERSIST_STROKES || strokeBuffer.length === 0 || !supabase) return;
 
     const batch = [...strokeBuffer];
     strokeBuffer = []; // Clear buffer immediately
@@ -800,8 +801,8 @@ io.on('connection', async (socket) => {
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
 
-            // --- Push to History Buffer ---
-            if (socket.dbSessionId) {
+            // --- Push to History Buffer (Selective Persistence) ---
+            if (PERSIST_STROKES && socket.dbSessionId) {
                 // Convert RGB back to hex for DB
                 const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
                 strokeBuffer.push({
@@ -920,7 +921,8 @@ io.on('connection', async (socket) => {
                 syncPub.publish('board_sync', JSON.stringify({ t: 'b', d: finalBuf.toString('base64') }));
             }
 
-            if (strokeBuffer.length >= STROKE_BATCH_LIMIT) flushStrokes();
+            // NOTE: Selective Persistence - Batch pixels (Auto-paint/Stamps) 
+            // are NOT added to strokeBuffer to save database resources.
 
             if (!socket.pixelScore) socket.pixelScore = 0;
             socket.pixelScore += pixelCount;
