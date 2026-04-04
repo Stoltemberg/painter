@@ -370,8 +370,8 @@ if (overlayOpacitySlider) {
 }
 
 // === AUTO-PAINT SYSTEM ===
-const AUTO_PAINT_BATCH_SIZE = 200; // Pixels per socket emit
-const AUTO_PAINT_BATCH_DELAY = 50; // ms between batches
+const AUTO_PAINT_BATCH_SIZE = 50; // Pixels per socket emit (Lowered for stability)
+const AUTO_PAINT_BATCH_DELAY = 150; // ms between batches (Increased to throttle)
 const AUTO_PAINT_ALPHA_THRESHOLD = 128; // Skip semi-transparent pixels
 let isAutoPainting = false;
 
@@ -452,7 +452,13 @@ async function autoPaintOverlay(overlayId) {
             return;
         }
 
-        // No ink limit — unlimited painting
+        // --- STOCHASTIC AUTO-PAINT (RANDOM ORDER) ---
+        // Shuffling the pixels so the image appears organically and not row-by-row
+        // This also spreads the load across the board more evenly
+        for (let i = pixels.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pixels[i], pixels[j]] = [pixels[j], pixels[i]];
+        }
 
         updateAutoPaintUI(0, `Painting ${pixels.length} pixels...`);
 
