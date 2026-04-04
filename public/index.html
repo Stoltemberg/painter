@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="style_auth.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Use specific version for stability -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -33,7 +34,9 @@
             <div class="glass-group">
                 <div class="coords" id="coords">X: 0, Y: 0</div>
                 <div class="divider"></div>
-                <div class="online-count" id="onlineCount">● 1</div>
+                <div class="online-count" id="onlineCount"><span class="pulse-dot"></span> 1</div>
+                <div class="divider"></div>
+                <div class="pixel-badge" id="pixelBadge">0 px</div>
             </div>
 
             <!-- User Group -->
@@ -54,35 +57,35 @@
             <div class="tools">
                 <!-- Main Tools -->
                 <div class="glass-group">
-                    <button id="brushBtn" class="tool-btn active" title="Brush (B)">🖌️</button>
-                    <button id="eraserBtn" class="tool-btn" title="Eraser (E)">🧽</button>
-                    <button id="pipetteBtn" class="tool-btn" title="Pipette (I)">🧪</button>
-                    <button id="fillBtn" class="tool-btn" title="Fill (F)">🪣</button>
-                    <button id="lineBtn" class="tool-btn" title="Line (L)">📏</button>
+                    <button id="brushBtn" class="tool-btn active" title="Brush (B)"><i data-lucide="pen-tool" class="icon"></i></button>
+                    <button id="eraserBtn" class="tool-btn" title="Eraser (E)"><i data-lucide="eraser" class="icon"></i></button>
+                    <button id="pipetteBtn" class="tool-btn" title="Pipette (I)"><i data-lucide="pipette" class="icon"></i></button>
+                    <button id="fillBtn" class="tool-btn" title="Fill (F)"><i data-lucide="paint-bucket" class="icon"></i></button>
+                    <button id="lineBtn" class="tool-btn" title="Line (L)"><i data-lucide="minus" class="icon"></i></button>
                 </div>
 
                 <!-- Special Tools -->
                 <div class="glass-group">
-                    <button id="stampBtn" class="tool-btn" title="Stamps (S)">⭐</button>
-                    <button id="overlayBtn" class="tool-btn" title="Overlays (O)">🖼️</button>
+                    <button id="stampBtn" class="tool-btn" title="Stamps (S)"><i data-lucide="stamp" class="icon"></i></button>
+                    <button id="overlayBtn" class="tool-btn" title="Overlays (O)"><i data-lucide="layers" class="icon"></i></button>
                 </div>
 
                 <div class="separator"></div>
 
                 <!-- View Tools -->
                 <div class="glass-group">
-                    <button id="gridBtn" title="Toggle Grid (G)">▦</button>
-                    <button id="viewModeBtn" title="Toggle View Mode">🔓</button>
-                    <button id="resetView" title="Reset View">🏠</button>
+                    <button id="gridBtn" class="tool-btn" title="Toggle Grid (G)"><i data-lucide="grid-3x3" class="icon"></i></button>
+                    <button id="viewModeBtn" class="tool-btn" title="Toggle View Mode"><i data-lucide="unlock" class="icon"></i></button>
+                    <button id="resetView" class="tool-btn" title="Reset View"><i data-lucide="home" class="icon"></i></button>
                 </div>
 
                 <div class="separator"></div>
 
                 <!-- System -->
                 <div class="glass-group">
-                    <button id="exportBtn" title="Export Image">📸</button>
-                    <button id="themeBtn" title="Toggle Theme">🌗</button>
-                    <button id="soundBtn" title="Toggle Sound">🔊</button>
+                    <button id="exportBtn" class="tool-btn" title="Export Image"><i data-lucide="download" class="icon"></i></button>
+                    <button id="themeBtn" class="tool-btn" title="Toggle Theme"><i data-lucide="sun-moon" class="icon"></i></button>
+                    <button id="soundBtn" class="tool-btn" title="Toggle Sound"><i data-lucide="volume-2" class="icon"></i></button>
                 </div>
             </div>
 
@@ -104,10 +107,10 @@
                 <div class="panel-header">Overlay Controls</div>
                 <div class="panel-content" style="display: flex; flex-direction: column; gap: 8px;">
                     <div style="display: flex; gap: 6px; align-items: center;">
-                        <button id="placeOverlayBtn" class="action-btn" title="Upload image overlay">📤 Upload</button>
-                        <button id="autoPaintBtn" class="action-btn" title="Paint overlay pixels onto board" disabled style="background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff;">🎨 Auto-paint</button>
-                        <button id="deleteOverlayBtn" class="action-btn" title="Delete selected overlay (Del)" disabled>🗑️ Delete</button>
-                        <button id="clearOverlaysBtn" class="danger-btn" title="Clear All Overlays">❌ All</button>
+                        <button id="placeOverlayBtn" class="action-btn" title="Upload image overlay">Upload</button>
+                        <button id="autoPaintBtn" class="action-btn" title="Paint overlay pixels onto board" disabled style="background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff;">Auto-paint</button>
+                        <button id="deleteOverlayBtn" class="action-btn" title="Delete selected overlay (Del)" disabled>Delete</button>
+                        <button id="clearOverlaysBtn" class="danger-btn" title="Clear All Overlays">Clear</button>
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center; font-size: 0.75rem; color: #aaa;">
                         <span>Opacity</span>
@@ -140,8 +143,10 @@
             <div id="status">Connecting...</div>
         </div>
 
-        <div id="leaderboard" class="leaderboard"></div>
-        <div id="team-leaderboard" class="leaderboard" style="top: 240px; display: none;"></div>
+        <div id="leaderboard-wrapper">
+            <div id="leaderboard" class="leaderboard"></div>
+            <div id="team-leaderboard" class="leaderboard leaderboard-team"></div>
+        </div>
         <div id="chat-container">
             <div id="chat-messages"></div>
             <input type="text" id="chat-input" placeholder="Say hello..." maxlength="100">
@@ -249,7 +254,8 @@
 
     <!-- Supabase Script Removed (Duplicate) -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
+    <script>lucide.createIcons();</script>
 </body>
 
 </html>

@@ -1897,21 +1897,11 @@ socket.on('pixel', (data) => {
 
 // Update personal score on pixel placement
 let myPixelCount = 0;
-const scoreDisplay = document.createElement('span');
-scoreDisplay.id = 'myScore';
-scoreDisplay.textContent = '0 px';
-// Style tweak: align nicely in the glass group
-scoreDisplay.style.cssText = 'color:var(--accent); font-weight:bold; font-size:0.9rem; border-left:1px solid var(--glass-border); padding-left:8px; margin-left:8px;';
-
-// Insert score next to nickname input if not exists
-const glassGroup = document.querySelector('.glass-group');
-if (glassGroup && !document.getElementById('myScore')) {
-    glassGroup.appendChild(scoreDisplay);
-}
 
 socket.on('pixel_score', (score) => {
     myPixelCount = score;
-    if (scoreDisplay) scoreDisplay.textContent = `${myPixelCount} px`;
+    const badge = document.getElementById('pixelBadge');
+    if (badge) badge.textContent = `${myPixelCount.toLocaleString()} px`;
 });
 
 
@@ -2147,37 +2137,65 @@ socket.on('chat_history', (history) => {
 
 // V5: Leaderboard
 const leaderboardDiv = document.getElementById('leaderboard');
+const pixelBadge = document.getElementById('pixelBadge');
+
+// Collapsible state
+let lbCollapsed = false;
+let tlbCollapsed = false;
+
+function toggleLeaderboard(div, isCollapsed) {
+    div.classList.toggle('collapsed', isCollapsed);
+}
+
 socket.on('leaderboard', (data) => {
     if (!leaderboardDiv) return;
-    if (data.length === 0) {
-        // Show empty state instead of hiding
-        leaderboardDiv.style.display = 'block';
-        leaderboardDiv.innerHTML = '<h3>🏆 Top Artists</h3><div style="text-align:center;color:#888;font-size:0.8rem;">No scores yet</div>';
-        return;
-    }
     leaderboardDiv.style.display = 'block';
-
-    // Build leaderboard safely (no innerHTML to prevent XSS)
     leaderboardDiv.innerHTML = '';
-    const title = document.createElement('h3');
-    title.textContent = '🏆 Top Artists';
-    leaderboardDiv.appendChild(title);
 
-    data.forEach(p => {
-        const item = document.createElement('div');
-        item.className = 'leaderboard-item';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = (p.name || 'Anon').substring(0, 10);
-
-        const scoreSpan = document.createElement('span');
-        scoreSpan.className = 'leaderboard-score';
-        scoreSpan.textContent = `${p.score}px`;
-
-        item.appendChild(nameSpan);
-        item.appendChild(scoreSpan);
-        leaderboardDiv.appendChild(item);
+    // Header
+    const header = document.createElement('div');
+    header.className = 'leaderboard-header';
+    header.innerHTML = '<h3>Top Artists</h3><span class="leaderboard-toggle">&#9660;</span>';
+    header.addEventListener('click', () => {
+        lbCollapsed = !lbCollapsed;
+        toggleLeaderboard(leaderboardDiv, lbCollapsed);
     });
+    leaderboardDiv.appendChild(header);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'leaderboard-body';
+
+    if (data.length === 0) {
+        body.innerHTML = '<div style="text-align:center;color:#888;font-size:0.75rem;padding:8px 0;">No scores yet</div>';
+    } else {
+        const rankClasses = ['gold', 'silver', 'bronze'];
+        data.forEach((p, i) => {
+            const item = document.createElement('div');
+            item.className = 'leaderboard-item';
+
+            const rankSpan = document.createElement('span');
+            rankSpan.className = 'leaderboard-rank' + (i < 3 ? ' ' + rankClasses[i] : '');
+            rankSpan.textContent = `#${i + 1}`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.style.flex = '1';
+            nameSpan.style.marginLeft = '6px';
+            nameSpan.textContent = (p.name || 'Guest').substring(0, 10);
+
+            const scoreSpan = document.createElement('span');
+            scoreSpan.className = 'leaderboard-score';
+            scoreSpan.textContent = `${p.score}px`;
+
+            item.appendChild(rankSpan);
+            item.appendChild(nameSpan);
+            item.appendChild(scoreSpan);
+            body.appendChild(item);
+        });
+    }
+
+    leaderboardDiv.appendChild(body);
+    if (lbCollapsed) leaderboardDiv.classList.add('collapsed');
 });
 
 // V7: Team Leaderboard
@@ -2185,28 +2203,50 @@ const teamLeaderboardDiv = document.getElementById('team-leaderboard');
 socket.on('team_scores', (scores) => {
     if (!teamLeaderboardDiv) return;
 
-    // Check if empty (all zero)
     if (!scores || (scores.red === 0 && scores.blue === 0 && scores.green === 0)) {
         teamLeaderboardDiv.style.display = 'none';
         return;
     }
 
     teamLeaderboardDiv.style.display = 'block';
-    teamLeaderboardDiv.innerHTML = `
-        <h3>⚔️ Team Battle</h3>
-        <div class="leaderboard-item" style="color:#ff4444">
-            <span>🔴 Red</span>
-            <span>${scores.red}px</span>
-        </div>
-        <div class="leaderboard-item" style="color:#4444ff">
-            <span>🔵 Blue</span>
-            <span>${scores.blue}px</span>
-        </div>
-        <div class="leaderboard-item" style="color:#44ff44">
-            <span>🟢 Green</span>
-            <span>${scores.green}px</span>
-        </div>
-    `;
+    teamLeaderboardDiv.innerHTML = '';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'leaderboard-header';
+    header.innerHTML = '<h3>Team Battle</h3><span class="leaderboard-toggle">&#9660;</span>';
+    header.addEventListener('click', () => {
+        tlbCollapsed = !tlbCollapsed;
+        toggleLeaderboard(teamLeaderboardDiv, tlbCollapsed);
+    });
+    teamLeaderboardDiv.appendChild(header);
+
+    // Body with progress bars
+    const body = document.createElement('div');
+    body.className = 'leaderboard-body';
+
+    const total = Math.max(scores.red + scores.blue + scores.green, 1);
+    const teams = [
+        { name: 'Red', color: '#ef4444', score: scores.red },
+        { name: 'Blue', color: '#3b82f6', score: scores.blue },
+        { name: 'Green', color: '#22c55e', score: scores.green }
+    ];
+
+    teams.forEach(t => {
+        const pct = (t.score / total * 100).toFixed(1);
+        const row = document.createElement('div');
+        row.className = 'team-row';
+        row.innerHTML = `
+            <span class="team-dot" style="background:${t.color}"></span>
+            <span class="team-name" style="color:${t.color}">${t.name}</span>
+            <div class="team-bar-bg"><div class="team-bar-fill" style="width:${pct}%;background:${t.color}"></div></div>
+            <span class="team-score-val">${t.score}px</span>
+        `;
+        body.appendChild(row);
+    });
+
+    teamLeaderboardDiv.appendChild(body);
+    if (tlbCollapsed) teamLeaderboardDiv.classList.add('collapsed');
 });
 
 // V5: Grid Toggle
@@ -2405,6 +2445,18 @@ async function initApp() {
             needsRedraw = true;
             updateMinimap();
             if (statusDiv) statusDiv.textContent = 'Loaded from Cache';
+
+            // Flash for 2 seconds then go back to 'Online'
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.style.transition = 'opacity 0.5s';
+                    statusDiv.style.opacity = '0';
+                    setTimeout(() => {
+                        statusDiv.textContent = 'Online';
+                        statusDiv.style.opacity = '1';
+                    }, 500);
+                }
+            }, 2000);
 
             // Dismiss overlay if loaded from cache
             const loadingOverlay = document.getElementById('loadingOverlay');
