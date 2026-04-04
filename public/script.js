@@ -488,13 +488,23 @@ async function autoPaintOverlay(overlayId) {
 
             const start = batchIndex * AUTO_PAINT_BATCH_SIZE;
             const end = Math.min(start + AUTO_PAINT_BATCH_SIZE, pixels.length);
-            const batch = pixels.slice(start, end);
+            const rawBatch = pixels.slice(start, end);
 
-            // Optimistic local draw
-            batch.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
+            // --- SMART SKIP LOGIC ---
+            // Filter out pixels that are already the correct color on the board
+            const filteredBatch = rawBatch.filter(p => {
+                // Get the current color at (p.x, p.y) from our local bufferCanvas
+                const current = bufferCtx.getImageData(p.x, p.y, 1, 1).data;
+                // If board color matches target color (RGB), skip it
+                return !(current[0] === p.r && current[1] === p.g && current[2] === p.b);
+            });
 
-            // Emit to server
-            socket.emit('batch_pixels', batch);
+            if (filteredBatch.length > 0) {
+                // Optimistic local draw
+                filteredBatch.forEach(p => drawPixel(p.x, p.y, p.r, p.g, p.b, true));
+                // Emit to server
+                socket.emit('batch_pixels', filteredBatch);
+            }
 
             // Update progress
             batchIndex++;
