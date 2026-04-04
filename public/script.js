@@ -1835,47 +1835,29 @@ socket.on('board_info', (info) => {
     }
 });
 
-socket.on('board_chunk', (chunk) => {
-    if (statusDiv) statusDiv.textContent = `Loading... ${Math.round(chunk.progress * 100)}%`;
+socket.on('board_full', (chunk) => {
+    if (statusDiv) statusDiv.textContent = 'Decompressing...';
 
-    // Raw Data (Uint8Array or similar from ArrayBuffer)
-    let data;
-    if (chunk.data instanceof ArrayBuffer) {
-        data = new Uint8Array(chunk.data);
-    } else {
-        // Maybe it's already a view or typed array?
-        data = new Uint8Array(chunk.data);
-    }
+    try {
+        // Decompress Gzip data using pako
+        const decompressed = pako.inflate(chunk.data);
+        const len = decompressed.length / 3; // R,G,B
+        const clamped = new Uint8ClampedArray(len * 4); // R,G,B,A
 
-    // chunk.height rows, boardSize width
-    // Buffer is R, G, B
-    const len = data.length / 3;
-    const clamped = new Uint8ClampedArray(len * 4);
+        for (let i = 0; i < len; i++) {
+            clamped[i * 4] = decompressed[i * 3];
+            clamped[i * 4 + 1] = decompressed[i * 3 + 1];
+            clamped[i * 4 + 2] = decompressed[i * 3 + 2];
+            clamped[i * 4 + 3] = 255;
+        }
 
-    for (let i = 0; i < len; i++) {
-        clamped[i * 4] = data[i * 3];
-        clamped[i * 4 + 1] = data[i * 3 + 1];
-        clamped[i * 4 + 2] = data[i * 3 + 2];
-        clamped[i * 4 + 3] = 255;
-    }
-
-    const imgData = new ImageData(clamped, boardSize, chunk.height);
-    // Put at chunk.y
-    bufferCtx.putImageData(imgData, 0, chunk.y);
-
-    // Optimistic: Only redraw full canvas at 100%? Or every chunk?
-    // Every chunk is fun to watch loading.
-    needsRedraw = true;
-
-    // Update minimap for this chunk (expensive? maybe just once at end?)
-    // Let's do it every 10%
-    if (chunk.progress * 100 % 10 < 2 || chunk.progress >= 0.99) {
+        const imgData = new ImageData(clamped, boardSize, boardSize); // Assumes square board
+        bufferCtx.putImageData(imgData, 0, 0);
+        needsRedraw = true;
         updateMinimap();
-    }
 
-    if (chunk.progress >= 0.99) {
         if (statusDiv) statusDiv.textContent = 'Online';
-        console.log('Board loading complete.');
+        console.log('Board loading complete (Compressed Payload).');
 
         // Dismiss loading overlay
         const loadingOverlay = document.getElementById('loadingOverlay');
@@ -1884,10 +1866,14 @@ socket.on('board_chunk', (chunk) => {
             setTimeout(() => loadingOverlay.remove(), 600);
         }
 
-        // Save to Cache
+        // Save to Cache for offline start
         bufferCanvas.toBlob((blob) => {
             saveCache(blob);
         });
+    } catch (e) {
+        console.error('Board decompression failed:', e);
+        if (statusDiv) statusDiv.textContent = 'Error loading board';
+        showToast('Failed to load board data. Please refresh.', 'error');
     }
 });
 
@@ -2419,8 +2405,24 @@ async function initApp() {
             needsRedraw = true;
             updateMinimap();
             if (statusDiv) statusDiv.textContent = 'Loaded from Cache';
+
+            // Dismiss overlay if loaded from cache
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+                setTimeout(() => loadingOverlay.remove(), 600);
+            }
         };
     }
+    // Failsafe: Remove loading overlay after 10 seconds no matter what
+    setTimeout(() => {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
+            console.warn('Loading taking too long, forcing overlay removal.');
+            loadingOverlay.classList.add('hidden');
+            setTimeout(() => loadingOverlay.remove(), 600);
+        }
+    }, 10000);
 }
 
 

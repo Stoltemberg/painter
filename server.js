@@ -636,54 +636,67 @@ io.on('connection', async (socket) => {
         if (data) socket.pixelScore = data.score;
     }
 
-    // Send current scores
-    socket.emit('pixel_score', socket.pixelScore);
-    socket.emit('leaderboard', globalLeaderboard);
-    socket.emit('team_scores', teamScores); // V7: Initial Team Scores
-
-    // 1. Send Metadata
+    // 1. Send Metadata & Board IMMEDIATELY (Non-blocking)
     socket.emit('board_info', { width: BOARD_WIDTH, height: BOARD_HEIGHT });
 
-    // 2. Send Chunks Sequentially (RAW - No Compression)
-    const totalChunks = Math.ceil(BOARD_HEIGHT / CHUNK_LINES);
+    // Send Compressed Board (Full payload is much more efficient than 60 chunks)
+    try {
+        const compressed = getCompressedBoard();
+        socket.emit('board_full', {
+            data: compressed,
+            size: board.length
+        });
+    } catch (e) {
+        console.error('Failed to send compressed board:', e);
+        // Fallback or handle? If this fails, the board won't load.
+    }
 
-    const sendChunks = async () => {
-        for (let i = 0; i < totalChunks; i++) {
-            if (!socket.connected) return;
+    // 2. Background Tasks (Auth, Scores, History)
+    (async () => {
+        try {
+            // Send Team Scores & Leaderboard immediately from memory
+            socket.emit('leaderboard', globalLeaderboard);
+            socket.emit('team_scores', teamScores);
+            socket.emit('chat_history', chatHistory);
 
-            const startY = i * CHUNK_LINES;
-            const endY = Math.min(startY + CHUNK_LINES, BOARD_HEIGHT);
+            // Supabase Logic (Can take time, so we do it in background)
+            if (supabase && guestId) {
+                // Session management
+                const { data: sessionData } = await supabase
+                    .from('sessions')
+                    .select('id')
+                    .eq('guest_uuid', guestId)
+                    .single();
 
-            const startByte = startY * BOARD_WIDTH * 3;
-            const endByte = endY * BOARD_WIDTH * 3;
+                if (sessionData) {
+                    socket.dbSessionId = sessionData.id;
+                    supabase.from('sessions').update({ last_seen: new Date() }).eq('id', socket.dbSessionId).then();
+                } else {
+                    const { data: newSession } = await supabase
+                        .from('sessions')
+                        .insert({ guest_uuid: guestId })
+                        .select('id')
+                        .single();
+                    if (newSession) socket.dbSessionId = newSession.id;
+                }
 
-            const slice = board.subarray(startByte, endByte);
-
-            socket.emit('board_chunk', {
-                y: startY,
-                height: endY - startY,
-                data: slice,
-                progress: (i + 1) / totalChunks
-            });
-
-            await new Promise(resolve => setTimeout(resolve, 20));
+                // Score management
+                const { data: scoreData } = await supabase
+                    .from('leaderboard')
+                    .select('score')
+                    .eq('id', guestId)
+                    .single();
+                if (scoreData) {
+                    socket.pixelScore = scoreData.score;
+                    socket.emit('pixel_score', socket.pixelScore);
+                }
+            }
+        } catch (e) {
+            console.error('Background connection tasks failed:', e);
         }
-    };
+    })();
 
-    sendChunks().catch(e => console.error('Chunk send error:', e));
-
-    // Send Chat History
-    socket.emit('chat_history', chatHistory);
-
-    // V7: Auth Handling (Join) - moved up or just use helper
-
-    // Initial Leaderboard
-    socket.emit('leaderboard', globalLeaderboard);
-    socket.emit('team_scores', teamScores);
-    socket.emit('pixel_score', socket.pixelScore || 0);
-    if (!supabase) broadcastLeaderboardLegacy();
-
-    // System Join Message
+    // V7: System Join Message
     socket.broadcast.emit('chat', { id: 'SYSTEM', text: 'A new canvas explorer joined!', name: 'System' });
 
     // --- Socket Event Handlers ---
