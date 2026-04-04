@@ -658,6 +658,7 @@ io.on('connection', async (socket) => {
             socket.emit('leaderboard', globalLeaderboard);
             socket.emit('team_scores', teamScores);
             socket.emit('chat_history', chatHistory);
+            socket.emit('update_overlays', activeOverlays); // Sync current overlays for new users
 
             // Supabase Logic (Can take time, so we do it in background)
             if (supabase && guestId) {

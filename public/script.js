@@ -961,8 +961,14 @@ function draw() {
                 ctx.lineWidth = 2 / scale;
                 ctx.strokeRect(ov.x, ov.y, w, h);
 
-                // Draw Resize Handle (Bottom-Right)
+                // Draw Owner Label
                 ctx.fillStyle = '#4ade80';
+                ctx.font = `${Math.max(12, 14 / scale)}px Inter, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(`Placed by: ${ov.owner || 'Unknown'}`, ov.x, ov.y - 5 / scale);
+
+                // Draw Resize Handle (Bottom-Right)
                 const handleSize = 10 / scale;
                 ctx.fillRect(ov.x + w - handleSize / 2, ov.y + h - handleSize / 2, handleSize, handleSize);
                 ctx.restore();
