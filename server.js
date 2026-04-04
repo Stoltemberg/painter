@@ -19,11 +19,13 @@ const { createClient: createRedisClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 
 const PORT = process.env.PORT || 3000;
-const BOARD_FILE = path.join(__dirname, 'board.dat');
-const BOARD_WIDTH = 3000;
-const BOARD_HEIGHT = 3000;
+const BOARD_WIDTH = 6000;
+const BOARD_HEIGHT = 6000;
+const QUAD_SIZE = 3000; // Size of each quadrant (3000x3000)
 const BUFFER_SIZE = BOARD_WIDTH * BOARD_HEIGHT * 3; // R,G,B per pixel
-const CHUNK_LINES = 50; // Smaller chunks (~450KB) for stability
+const CHUNK_LINES = 50; 
+const QUADRANTS = ['board_q1.dat', 'board_q2.dat', 'board_q3.dat', 'board_q4.dat'];
+const BOARD_FILE = path.join(__dirname, 'board.dat'); // Legacy local cache check
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -198,61 +200,75 @@ setInterval(() => {
 const initBoard = async () => {
     let loadedFromCloud = false;
 
-    // Helper to migrate old board if needed
-    const loadAndMigrate = (buffer) => {
-        const len = buffer.length;
-
-        if (len === BUFFER_SIZE) {
-            board = buffer;
-            return true;
-        }
-
-        console.log(`Board size mismatch: expected ${BUFFER_SIZE}, got ${len}`);
-        return false;
-    };
-
-    // 1. Try Supabase first (Source of Truth)
     if (supabase) {
         try {
-            console.log('Checking Supabase for board.dat...');
-            const { data, error } = await supabase
-                .storage
-                .from('pixel-board')
-                .download('board.dat');
+            console.log('Checking Supabase for board quadrants...');
+            const quadBuffers = [];
+            let allQuadsExist = true;
 
-            if (error) {
-                console.log('Supabase download error:', error.message);
-            } else if (data) {
-                const arrayBuffer = await data.arrayBuffer();
-                const buffer = Buffer.from(arrayBuffer);
-
-                if (loadAndMigrate(buffer)) {
-                    console.log('Board loaded from Supabase!');
-                    // Save locally to cache force update size
-                    fs.writeFileSync(BOARD_FILE, board);
-                    loadedFromCloud = true;
+            // Try downloading all 4 quadrants
+            for (const qFile of QUADRANTS) {
+                const { data, error } = await supabase.storage.from('pixel-board').download(qFile);
+                if (data) {
+                    const ab = await data.arrayBuffer();
+                    quadBuffers.push(Buffer.from(ab));
                 } else {
-                    console.log('Supabase board size mismatch and migration failed.');
+                    allQuadsExist = false;
+                    break;
+                }
+            }
+
+            if (allQuadsExist && quadBuffers.length === 4) {
+                console.log('Detected 4 quadrants. Assembling 6000x6000 board...');
+                const Q_BYTE_SIZE = QUAD_SIZE * QUAD_SIZE * 3;
+                
+                for (let q = 0; q < 4; q++) {
+                    const qBuffer = quadBuffers[q];
+                    const offsetIdx = q;
+                    
+                    for (let row = 0; row < QUAD_SIZE; row++) {
+                        const targetY = (offsetIdx >= 2) ? (row + QUAD_SIZE) : row;
+                        const targetXStart = (offsetIdx % 2 === 1) ? QUAD_SIZE : 0;
+                        
+                        const sourceStart = row * QUAD_SIZE * 3;
+                        const targetStart = (targetY * BOARD_WIDTH + targetXStart) * 3;
+                        
+                        qBuffer.copy(board, targetStart, sourceStart, sourceStart + QUAD_SIZE * 3);
+                    }
+                }
+                console.log('Board assembled from quadrants!');
+                loadedFromCloud = true;
+            } else {
+                console.log('Quadrants missing. Checking for legacy board.dat for migration...');
+                // Migration: Load 3000x3000 board.dat into Q1 of the 6000x6000 board
+                const { data, error } = await supabase.storage.from('pixel-board').download('board.dat');
+                if (data) {
+                    const ab = await data.arrayBuffer();
+                    const legacyBuffer = Buffer.from(ab);
+                    const LEGACY_SIZE = 3000 * 3000 * 3;
+
+                    if (legacyBuffer.length === LEGACY_SIZE) {
+                        console.log('Legacy 3000x3000 board found. Migrating to Q1 (Top-Left of 6000x6000)...');
+                        board.fill(255); // Start white
+                        for (let row = 0; row < 3000; row++) {
+                            const sourceStart = row * 3000 * 3;
+                            const targetStart = row * BOARD_WIDTH * 3;
+                            legacyBuffer.copy(board, targetStart, sourceStart, sourceStart + 3000 * 3);
+                        }
+                        console.log('Migration successful.');
+                        loadedFromCloud = true;
+                        needsSave = true; // Mark as dirty to trigger a quadrant save
+                    }
                 }
             }
         } catch (err) {
-            console.error('Error with Supabase init:', err);
+            console.error('Error with board segment initialization:', err);
         }
     }
 
-    // 2. If Supabase failed, try local file
-    if (!loadedFromCloud && fs.existsSync(BOARD_FILE)) {
-        try {
-            console.log('Loading board from local file (Fallback)...');
-            const data = fs.readFileSync(BOARD_FILE);
-            if (loadAndMigrate(data)) {
-                console.log('Local board loaded.');
-            } else {
-                console.log('Local board size mismatch, ignoring.');
-            }
-        } catch (err) {
-            console.error('Error loading local board:', err);
-        }
+    if (!loadedFromCloud) {
+        console.log('No existing board data found. Initializing clean 6000x6000 whiteboard.');
+        board.fill(255);
     }
 };
 
@@ -445,39 +461,42 @@ setInterval(flushStrokes, FLUSH_INTERVAL);
 
 // Snapshot Logic (Lazy Cloud Save)
 const saveBoard = async () => {
-    // Only save if dirty AND not currently uploading
-    if (needsSave && !isUploading) {
-        // 1. Save locally (Cache only - keep for quick restart)
-        // We can skip this if disk IO is a concern, but it's good for crash recovery.
-        // On Render Free Tier, we'll skip frequent local writes to save IOPS/CPU.
-        /* 
-        fs.writeFile(BOARD_FILE, board, (err) => {
-             if (err) console.error('Error saving local board:', err);
-        }); 
-        */
+    if (needsSave && !isUploading && supabase) {
+        isUploading = true;
+        console.log('Saving board quadrants to Supabase...');
 
-        // 2. Upload to Supabase (Source of Truth)
-        if (supabase) {
-            isUploading = true;
-            console.log('Uploading board snapshot to Supabase...');
+        try {
+            // Split 6000x6000 board into 4 buffers (3000x3000 each)
+            const Q_BYTE_SIZE = QUAD_SIZE * QUAD_SIZE * 3;
+            
+            for (let q = 0; q < 4; q++) {
+                const qBuffer = Buffer.alloc(Q_BYTE_SIZE);
+                const offsetIdx = q;
+                
+                for (let row = 0; row < QUAD_SIZE; row++) {
+                    const sourceY = (offsetIdx >= 2) ? (row + QUAD_SIZE) : row;
+                    const sourceXStart = (offsetIdx % 2 === 1) ? QUAD_SIZE : 0;
+                    
+                    const sourceStart = (sourceY * BOARD_WIDTH + sourceXStart) * 3;
+                    const targetStart = row * QUAD_SIZE * 3;
+                    
+                    board.copy(qBuffer, targetStart, sourceStart, sourceStart + QUAD_SIZE * 3);
+                }
 
-            const { error } = await supabase
-                .storage
-                .from('pixel-board')
-                .upload('board.dat', board, {
+                // Upload quadrant
+                await supabase.storage.from('pixel-board').upload(QUADRANTS[q], qBuffer, {
                     contentType: 'application/octet-stream',
                     upsert: true
                 });
-
-            if (error) {
-                console.error('Supabase upload error:', error.message);
-            } else {
-                console.log('Supabase upload success.');
-                needsSave = false; // logic: only mark clean if cloud accepted it
             }
 
-            isUploading = false;
+            console.log('All quadrants uploaded successfully.');
+            needsSave = false;
+        } catch (err) {
+            console.error('Error saving quadrants:', err.message);
         }
+
+        isUploading = false;
     }
 };
 

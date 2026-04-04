@@ -1851,9 +1851,17 @@ socket.on('board_info', (info) => {
     console.log('Board info received:', info);
     // Ensure boardSize matches server
     if (info.width && info.height) {
-        boardSize = info.width; // 3000 default
-        // re-center if needed?
-        // bufferCanvas.width/height is already 3000
+        boardSize = info.width; 
+        
+        // Resize bufferCanvas to match the 6k x 6k server board
+        if (bufferCanvas.width !== boardSize) {
+            console.log(`Resizing bufferCanvas to ${boardSize}x${boardSize}`);
+            bufferCanvas.width = boardSize;
+            bufferCanvas.height = boardSize;
+            // Clear to white initially
+            bufferCtx.fillStyle = '#ffffff';
+            bufferCtx.fillRect(0, 0, boardSize, boardSize);
+        }
     }
 });
 
